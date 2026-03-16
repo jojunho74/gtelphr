@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GTELP 채용 지원</title>
+<script>
+// ── Firebase REST API (SDK 없이 직접 통신) ──
+const FB = {
+  projectId: 'gtelphr',
+  apiKey:    'AIzaSyBA5PKAviHX4KD16oU89mEkKeZ1tcCgwSE',
+  baseUrl()  { return `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents`; },
+  toValue(v) {
+    if (v === null || v === undefined) return { nullValue: null };
+    if (typeof v === 'boolean') return { booleanValue: v };
+    if (typeof v === 'number')  return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+    if (typeof v === 'string')  return { stringValue: v };
+    if (Array.isArray(v))       return { arrayValue: { values: v.map(x => FB.toValue(x)) } };
+    if (typeof v === 'object')  return { mapValue: { fields: FB.toFields(v) } };
+    return { stringValue: String(v) };
+  },
+  toFields(obj) {
+    const fields = {};
+    for (const k in obj) fields[k] = FB.toValue(obj[k]);
+    return fields;
+  },
+  async add(col, obj) {
+    const res = await fetch(`${FB.baseUrl()}/${col}?key=${FB.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: FB.toFields(obj) })
+    });
+    if (!res.ok) { const e = await res.text(); throw new Error(`저장 실패: ${e}`); }
+    return await res.json();
+  },
+};
+</script>
+<style>
+  body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fffbf7; }
+  .step-card { background: white; border-radius: 32px; box-shadow: 0 4px 40px rgba(0,0,0,0.06); border: 1px solid #f0f0f0; }
+  .btn-primary { background: linear-gradient(135deg, #f97316, #f59e0b); color: white; border-radius: 16px; font-weight: 900; padding: 14px 28px; border: none; cursor: pointer; transition: all 0.2s; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(249,115,22,0.3); }
+  .btn-secondary { background: #f9fafb; color: #6b7280; border-radius: 16px; font-weight: 900; padding: 14px 28px; border: 1px solid #e5e7eb; cursor: pointer; }
+  .input { width: 100%; padding: 12px 16px; border-radius: 14px; border: 1.5px solid #e5e7eb; background: #f9fafb; font-size: 14px; font-weight: 500; outline: none; transition: all 0.2s; box-sizing: border-box; }
+  .input:focus { border-color: #f97316; background: white; box-shadow: 0 0 0 3px rgba(249,115,22,0.1); }
+  .position-card { border: 2px solid #e5e7eb; border-radius: 20px; padding: 20px; cursor: pointer; transition: all 0.2s; background: white; }
+  .position-card:hover { border-color: #f97316; box-shadow: 0 4px 16px rgba(249,115,22,0.1); }
+  .position-card.selected { border-color: #f97316; background: #fff7ed; box-shadow: 0 4px 20px rgba(249,115,22,0.2); }
+  .step-dot { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; transition: all 0.3s; flex-shrink: 0; }
+  .step-dot.done { background: #10b981; color: white; }
+  .step-dot.active { background: #f97316; color: white; transform: scale(1.1); box-shadow: 0 4px 12px rgba(249,115,22,0.4); }
+  .step-dot.todo { background: #f3f4f6; color: #9ca3af; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 20px; font-size: 12px; font-weight: 700; color: #ea580c; }
+  .progress-bar { height: 8px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #f97316, #f59e0b); border-radius: 999px; transition: width 0.4s ease; }
+  .success-screen { display: none; min-height: 100vh; background: linear-gradient(135deg, #fff7ed, #fef3c7); align-items: center; justify-content: center; }
+  .spinner { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  label { display: block; font-size: 11px; font-weight: 900; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .error-msg { color: #ef4444; font-size: 12px; font-weight: 700; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header style="background:white;border-bottom:1px solid #fde68a;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.04)">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="background:linear-gradient(135deg,#f97316,#f59e0b);padding:8px;border-radius:12px;font-size:18px">🔥</div>
+    <span style="font-size:20px;font-weight:900;color:#111">GTELP <span style="color:#f97316">채용</span></span>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <div style="width:8px;height:8px;background:#10b981;border-radius:50%;animation:pulse 2s infinite"></div>
+    <span style="font-size:12px;font-weight:700;color:#6b7280">실시간 접수중</span>
+  </div>
+</header>
+
+<!-- Main Form -->
+<main id="mainForm" style="max-width:640px;margin:0 auto;padding:32px 16px">
+
+  <!-- Step Indicator -->
+  <div id="stepIndicator" style="display:flex;align-items:flex-start;justify-content:center;gap:8px;margin-bottom:40px"></div>
+
+  <!-- Step Content -->
+  <div class="step-card" style="padding:36px">
+
+    <!-- STEP 1: 포지션 -->
+    <div id="step1">
+      <h2 style="font-size:24px;font-weight:900;color:#111;margin-bottom:4px">어떤 포지션에 지원하시나요?</h2>
+      <p style="color:#9ca3af;font-weight:500;margin-bottom:28px">관심 있는 직군을 선택해 주세요</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="positionGrid"></div>
+      <p id="err_position" class="error-msg" style="display:none;margin-top:12px">⚠ 포지션을 선택해 주세요</p>
+    </div>
+
+    <!-- STEP 2: 기본정보 -->
+    <div id="step2" style="display:none">
+      <h2 style="font-size:24px;font-weight:900;color:#111;margin-bottom:4px">기본 정보를 입력해 주세요</h2>
+      <p style="color:#9ca3af;font-weight:500;margin-bottom:28px">정확한 정보를 입력해 주셔야 전형 안내가 가능합니다</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div><label>이름 *</label><input class="input" id="f_name" placeholder="홍길동"><p class="error-msg" id="err_name" style="display:none"></p></div>
+        <div><label>생년월일 *</label><input class="input" type="date" id="f_birth"><p class="error-msg" id="err_birth" style="display:none"></p></div>
+        <div><label>이메일 *</label><input class="input" type="email" id="f_email" placeholder="example@email.com"><p class="error-msg" id="err_email" style="display:none"></p></div>
+        <div><label>연락처 *</label><input class="input" type="tel" id="f_phone" placeholder="010-0000-0000"><p class="error-msg" id="err_phone" style="display:none"></p></div>
+        <div style="grid-column:1/-1"><label>주소 *</label><input class="input" id="f_address" placeholder="서울시 강남구 테헤란로 123"><p class="error-msg" id="err_address" style="display:none"></p></div>
+        <div><label>나이</label><input class="input" type="number" id="f_age" placeholder="25" min="18" max="60"></div>
+        <div>
+          <label>성별</label>
+          <div style="display:flex;gap:8px;height:44px">
+            <button onclick="selectGender('남')" id="g_male" style="flex:1;border-radius:12px;border:2px solid #e5e7eb;font-weight:900;font-size:14px;cursor:pointer;background:#f9fafb;color:#9ca3af;transition:all 0.2s">남</button>
+            <button onclick="selectGender('여')" id="g_female" style="flex:1;border-radius:12px;border:2px solid #e5e7eb;font-weight:900;font-size:14px;cursor:pointer;background:#f9fafb;color:#9ca3af;transition:all 0.2s">여</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: 학력·어학 -->
+    <div id="step3" style="display:none">
+      <h2 style="font-size:24px;font-weight:900;color:#111;margin-bottom:4px">학력 및 어학 능력</h2>
+      <p style="color:#9ca3af;font-weight:500;margin-bottom:28px">최종 학력과 어학 시험 점수를 입력해 주세요</p>
+
+      <div style="background:#f9fafb;border-radius:20px;padding:20px;margin-bottom:16px">
+        <p style="font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">최종 학력</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><label>학교명</label><input class="input" id="f_education" placeholder="OO대학교"></div>
+          <div><label>전공</label><input class="input" id="f_major" placeholder="경영학과"></div>
+          <div><label>학점</label><input class="input" id="f_gpa" placeholder="3.8/4.5"></div>
+          <div><label>졸업구분</label>
+            <select class="input" id="f_gradType">
+              <option>졸업</option><option>졸업예정</option><option>재학중</option><option>중퇴</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#f9fafb;border-radius:20px;padding:20px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <p style="font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin:0">어학 성적</p>
+          <button onclick="addLanguage()" style="background:#f97316;color:white;border:none;border-radius:10px;padding:6px 14px;font-size:12px;font-weight:900;cursor:pointer">+ 추가</button>
+        </div>
+        <div id="languageList"></div>
+        <p style="color:#d1d5db;font-size:13px;font-weight:500;text-align:center;padding:12px 0" id="noLanguage">어학 성적을 추가해 주세요</p>
+      </div>
+
+      <div style="background:#f9fafb;border-radius:20px;padding:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <p style="font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin:0">자격증</p>
+          <button onclick="addCert()" style="background:#f97316;color:white;border:none;border-radius:10px;padding:6px 14px;font-size:12px;font-weight:900;cursor:pointer">+ 추가</button>
+        </div>
+        <div id="certList"></div>
+        <p style="color:#d1d5db;font-size:13px;font-weight:500;text-align:center;padding:12px 0" id="noCert">보유한 자격증을 추가해 주세요</p>
+      </div>
+    </div>
+
+    <!-- STEP 4: 자기소개서 -->
+    <div id="step4" style="display:none">
+      <h2 style="font-size:24px;font-weight:900;color:#111;margin-bottom:4px">자기소개서</h2>
+      <p style="color:#9ca3af;font-weight:500;margin-bottom:28px">최소 200자 이상 작성해 주세요</p>
+      <div style="position:relative">
+        <textarea id="f_cover" rows="12" placeholder="자신을 소개해 주세요. 지원 동기, 역량, 목표 등을 자유롭게 작성해 주세요..." oninput="updateCoverCount()"
+          style="width:100%;padding:16px;border-radius:20px;border:1.5px solid #e5e7eb;background:#f9fafb;font-size:14px;font-weight:500;line-height:1.7;resize:none;outline:none;box-sizing:border-box;transition:all 0.2s;font-family:inherit"></textarea>
+        <span id="coverCount" style="position:absolute;bottom:16px;right:16px;font-size:12px;font-weight:900;color:#d1d5db">0자</span>
+      </div>
+      <div style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:900;color:#9ca3af">작성 진행도</span>
+          <span id="coverPct" style="font-size:11px;font-weight:900;color:#9ca3af">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="coverProgress" style="width:0%"></div></div>
+        <p class="error-msg" id="err_cover" style="display:none;margin-top:8px"></p>
+      </div>
+    </div>
+
+    <!-- STEP 5: 최종확인 -->
+    <div id="step5" style="display:none">
+      <h2 style="font-size:24px;font-weight:900;color:#111;margin-bottom:4px">최종 확인</h2>
+      <p style="color:#9ca3af;font-weight:500;margin-bottom:28px">입력하신 내용을 확인해 주세요</p>
+      <div id="reviewContent"></div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:14px;margin-top:16px;font-size:13px;color:#1d4ed8;font-weight:600">
+        📋 제출 시 지원자 데이터가 HR 시스템에 즉시 등록됩니다.
+      </div>
+      <div id="submitError" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:16px;padding:14px;margin-top:12px;font-size:13px;color:#dc2626;font-weight:600"></div>
+    </div>
+
+    <!-- Buttons -->
+    <div style="display:flex;gap:12px;margin-top:32px">
+      <button id="btnBack" onclick="prevStep()" style="display:none" class="btn-secondary">← 이전</button>
+      <button id="btnNext" onclick="nextStep()" class="btn-primary" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px">
+        <span id="btnNextText">다음 단계 →</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 신뢰 배지 -->
+  <div style="display:flex;justify-content:center;gap:24px;margin-top:24px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:#9ca3af">🔒 개인정보 암호화</span>
+    <span style="font-size:12px;font-weight:700;color:#9ca3af">⚡ 실시간 접수 확인</span>
+    <span style="font-size:12px;font-weight:700;color:#9ca3af">📧 결과 즉시 안내</span>
+  </div>
+</main>
+
+<!-- Success Screen -->
+<div class="success-screen" id="successScreen" style="display:none;min-height:100vh;background:linear-gradient(135deg,#fff7ed,#fef3c7);align-items:center;justify-content:center;padding:24px">
+  <div style="background:white;border-radius:48px;box-shadow:0 24px 80px rgba(0,0,0,0.08);max-width:440px;width:100%;padding:48px;text-align:center;border:1px solid #fed7aa">
+    <div style="position:relative;width:96px;height:96px;margin:0 auto 32px">
+      <div style="width:96px;height:96px;background:linear-gradient(135deg,#f97316,#f59e0b);border-radius:32px;display:flex;align-items:center;justify-content:center;font-size:36px;box-shadow:0 12px 40px rgba(249,115,22,0.3)">✨</div>
+      <div style="position:absolute;top:-8px;right:-8px;width:32px;height:32px;background:#10b981;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;font-weight:900;box-shadow:0 4px 12px rgba(16,185,129,0.4)">✓</div>
+    </div>
+    <h1 style="font-size:32px;font-weight:900;color:#111;margin-bottom:8px">접수 완료!</h1>
+    <p style="color:#9ca3af;font-weight:500;line-height:1.6;margin-bottom:32px">
+      <span id="successName" style="color:#f97316;font-weight:900"></span>님의 지원서가<br>성공적으로 제출되었습니다 🎉
+    </p>
+    <div style="background:#fff7ed;border-radius:24px;padding:20px;margin-bottom:24px;border:1px solid #fed7aa;text-align:left">
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #fde68a"><span style="font-size:11px;font-weight:900;color:#9ca3af">지원 포지션</span><span id="successPosition" style="font-weight:900;color:#111"></span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #fde68a"><span style="font-size:11px;font-weight:900;color:#9ca3af">이름</span><span id="successNameRow" style="font-weight:900;color:#111"></span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0"><span style="font-size:11px;font-weight:900;color:#9ca3af">접수 일시</span><span id="successDate" style="font-weight:700;color:#6b7280;font-size:13px"></span></div>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:16px;padding:14px">
+      <p style="font-size:12px;font-weight:900;color:#16a34a;margin-bottom:4px">⚡ Firebase 저장 완료</p>
+      <p style="font-size:12px;color:#4ade80">HR 담당자가 실시간으로 확인할 수 있습니다</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const POSITIONS = [
+  {id:'overseas_sales',label:'해외영업',icon:'🌏',desc:'글로벌 시장 개척 및 바이어 관리'},
+  {id:'marketing',label:'마케팅',icon:'📢',desc:'디지털 마케팅 및 브랜드 전략'},
+  {id:'developer',label:'개발자',icon:'💻',desc:'서비스 개발 및 시스템 설계'},
+  {id:'designer',label:'디자이너',icon:'🎨',desc:'UX/UI 및 브랜드 비주얼'},
+  {id:'interpreter',label:'통역/번역',icon:'🗣️',desc:'영어 통번역 및 국제 커뮤니케이션'},
+  {id:'sales',label:'국내영업',icon:'🤝',desc:'국내 채널 영업 및 파트너 관리'},
+];
+const LANG_OPTIONS = ['TOEIC','TOEFL','IELTS','TEPS','OPIc','TOEIC Speaking','HSK','JLPT','기타'];
+
+let currentStep = 1;
+let selectedPosition = null;
+let selectedGender = '';
+let languages = [];
+let certs = [];
+
+// ── 포지션 그리드 렌더 ──
+function renderPositions() {
+  const grid = document.getElementById('positionGrid');
+  grid.innerHTML = POSITIONS.map(p => `
+    <div class="position-card${selectedPosition===p.id?' selected':''}" onclick="selectPosition('${p.id}','${p.label}')">
+      <div style="font-size:28px;margin-bottom:10px">${p.icon}</div>
+      <h3 style="font-weight:900;font-size:15px;color:#111;margin-bottom:4px">${p.label}</h3>
+      <p style="font-size:12px;color:#9ca3af;font-weight:500">${p.desc}</p>
+      ${selectedPosition===p.id?'<div style="position:absolute;top:12px;right:12px;width:22px;height:22px;background:#f97316;border-radius:50%;color:white;display:flex;align-items:center;justify-content:center;font-size:12px">✓</div>':''}
+    </div>
+  `).join('');
+  document.querySelectorAll('.position-card').forEach(c => c.style.position='relative');
+}
+
+function selectPosition(id, label) {
+  selectedPosition = id;
+  window._positionLabel = label;
+  document.getElementById('err_position').style.display='none';
+  renderPositions();
+}
+
+function selectGender(g) {
+  selectedGender = g;
+  document.getElementById('g_male').style.borderColor = g==='남'?'#f97316':'#e5e7eb';
+  document.getElementById('g_male').style.background = g==='남'?'#fff7ed':'#f9fafb';
+  document.getElementById('g_male').style.color = g==='남'?'#ea580c':'#9ca3af';
+  document.getElementById('g_female').style.borderColor = g==='여'?'#f97316':'#e5e7eb';
+  document.getElementById('g_female').style.background = g==='여'?'#fff7ed':'#f9fafb';
+  document.getElementById('g_female').style.color = g==='여'?'#ea580c':'#9ca3af';
+}
+
+// ── 어학/자격증 ──
+function addLanguage() {
+  languages.push({name:'',score:''});
+  renderLanguages();
+}
+function removeLanguage(i) { languages.splice(i,1); renderLanguages(); }
+function updateLang(i,field,val) { languages[i][field]=val; }
+function renderLanguages() {
+  const list = document.getElementById('languageList');
+  document.getElementById('noLanguage').style.display = languages.length?'none':'block';
+  list.innerHTML = languages.map((l,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;background:white;padding:12px;border-radius:14px;border:1px solid #f3f4f6;margin-bottom:8px">
+      <select onchange="updateLang(${i},'name',this.value)" style="flex:1;padding:8px 12px;border-radius:10px;border:1.5px solid #e5e7eb;background:#f9fafb;font-size:13px;font-weight:600;outline:none">
+        <option value="">선택</option>${LANG_OPTIONS.map(n=>`<option${l.name===n?' selected':''}>${n}</option>`).join('')}
+      </select>
+      <input value="${l.score}" onchange="updateLang(${i},'score',this.value)" placeholder="점수" style="flex:1;padding:8px 12px;border-radius:10px;border:1.5px solid #e5e7eb;background:#f9fafb;font-size:13px;font-weight:600;outline:none">
+      <button onclick="removeLanguage(${i})" style="background:#fef2f2;border:none;border-radius:8px;padding:8px;cursor:pointer;color:#f87171;font-size:14px">🗑</button>
+    </div>
+  `).join('');
+}
+
+function addCert() { certs.push(''); renderCerts(); }
+function removeCert(i) { certs.splice(i,1); renderCerts(); }
+function updateCert(i,val) { certs[i]=val; }
+function renderCerts() {
+  const list = document.getElementById('certList');
+  document.getElementById('noCert').style.display = certs.length?'none':'block';
+  list.innerHTML = certs.map((c,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;background:white;padding:12px;border-radius:14px;border:1px solid #f3f4f6;margin-bottom:8px">
+      <input value="${c}" onchange="updateCert(${i},this.value)" placeholder="자격증명 (예: 정보처리기사)" style="flex:1;padding:8px 12px;border-radius:10px;border:1.5px solid #e5e7eb;background:#f9fafb;font-size:13px;font-weight:600;outline:none">
+      <button onclick="removeCert(${i})" style="background:#fef2f2;border:none;border-radius:8px;padding:8px;cursor:pointer;color:#f87171;font-size:14px">🗑</button>
+    </div>
+  `).join('');
+}
+
+// ── 자기소개서 카운터 ──
+function updateCoverCount() {
+  const text = document.getElementById('f_cover').value;
+  const count = text.length;
+  const pct = Math.min(100, Math.round((count/200)*100));
+  document.getElementById('coverCount').textContent = count+'자';
+  document.getElementById('coverCount').style.color = count>=200?'#10b981':'#9ca3af';
+  document.getElementById('coverProgress').style.width = pct+'%';
+  document.getElementById('coverPct').textContent = pct+'%';
+}
+
+// ── Step Indicator ──
+function renderStepIndicator() {
+  const labels = ['포지션','기본정보','학력·어학','자기소개서','최종확인'];
+  const el = document.getElementById('stepIndicator');
+  el.innerHTML = labels.map((l,i)=>{
+    const step = i+1;
+    const done = step < currentStep;
+    const active = step === currentStep;
+    const cls = done?'done':active?'active':'todo';
+    const line = i<labels.length-1?`<div style="width:${window.innerWidth>500?'48px':'24px'};height:2px;background:${done?'#10b981':'#e5e7eb'};border-radius:999px;margin-bottom:20px"></div>`:'';
+    return `
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <div class="step-dot ${cls}">${done?'✓':step}</div>
+          <span style="font-size:10px;font-weight:900;color:${active?'#f97316':done?'#10b981':'#d1d5db'};display:none;white-space:nowrap" class="step-label">${l}</span>
+        </div>
+        ${line}
+      </div>`;
+  }).join('');
+  if(window.innerWidth>480) document.querySelectorAll('.step-label').forEach(el=>el.style.display='block');
+}
+
+// ── 검증 ──
+function validate() {
+  let ok = true;
+  if(currentStep===1) {
+    if(!selectedPosition){document.getElementById('err_position').style.display='block';ok=false;}
+  }
+  if(currentStep===2) {
+    const fields=[{id:'f_name',err:'err_name',msg:'이름을 입력해 주세요'},{id:'f_email',err:'err_email',msg:'올바른 이메일을 입력해 주세요'},{id:'f_birth',err:'err_birth',msg:'생년월일을 입력해 주세요'},{id:'f_phone',err:'err_phone',msg:'연락처를 입력해 주세요'},{id:'f_address',err:'err_address',msg:'주소를 입력해 주세요'}];
+    fields.forEach(f=>{
+      const v=document.getElementById(f.id).value.trim();
+      const valid = f.id==='f_email'?v.includes('@'):v.length>0;
+      document.getElementById(f.err).textContent=f.msg;
+      document.getElementById(f.err).style.display=valid?'none':'block';
+      if(!valid)ok=false;
+    });
+  }
+  if(currentStep===4) {
+    const count=document.getElementById('f_cover').value.length;
+    if(count<200){document.getElementById('err_cover').textContent=`최소 200자 이상 작성해 주세요 (현재 ${count}자)`;document.getElementById('err_cover').style.display='block';ok=false;}
+    else document.getElementById('err_cover').style.display='none';
+  }
+  return ok;
+}
+
+// ── 최종 확인 렌더 ──
+function renderReview() {
+  const name=document.getElementById('f_name').value;
+  const email=document.getElementById('f_email').value;
+  const birth=document.getElementById('f_birth').value;
+  const phone=document.getElementById('f_phone').value;
+  const address=document.getElementById('f_address').value;
+  const age=document.getElementById('f_age').value;
+  const edu=document.getElementById('f_education').value;
+  const major=document.getElementById('f_major').value;
+  const gpa=document.getElementById('f_gpa').value;
+  const cover=document.getElementById('f_cover').value;
+  const langStr=languages.filter(l=>l.name).map(l=>`${l.name} ${l.score}`).join(', ')||'—';
+  const certStr=certs.filter(Boolean).join(', ')||'—';
+
+  document.getElementById('reviewContent').innerHTML=`
+    <div style="background:linear-gradient(135deg,#fff7ed,#fef3c7);border-radius:20px;padding:20px;margin-bottom:16px;border:1px solid #fed7aa">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:28px">${POSITIONS.find(p=>p.id===selectedPosition)?.icon||'💼'}</span>
+        <div><p style="font-weight:900;font-size:18px;color:#111">${window._positionLabel}</p><p style="font-size:11px;font-weight:900;color:#f97316;text-transform:uppercase;letter-spacing:0.08em">지원 포지션</p></div>
+      </div>
+    </div>
+    ${reviewSection('기본 정보',[
+      ['이름',name],['생년월일',birth],['이메일',email],['연락처',phone],['주소',address],['나이/성별',`${age||''}세 / ${selectedGender||'—'}`]
+    ])}
+    ${reviewSection('학력 · 어학',[
+      ['최종학력',edu?`${edu} ${major} (GPA:${gpa})`:'—'],['어학성적',langStr],['자격증',certStr]
+    ])}
+    <div style="background:white;border-radius:20px;border:1px solid #f3f4f6;padding:20px">
+      <p style="font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">자기소개서 (${cover.length}자)</p>
+      <p style="font-size:13px;color:#4b5563;font-weight:500;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow:hidden">${cover.substring(0,300)}${cover.length>300?'...':''}</p>
+    </div>`;
+}
+
+function reviewSection(title, rows) {
+  return `<div style="background:white;border-radius:20px;border:1px solid #f3f4f6;padding:20px;margin-bottom:12px">
+    <p style="font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">${title}</p>
+    ${rows.map(([l,v])=>`<div style="display:flex;gap:16px;padding:8px 0;border-bottom:1px solid #f9fafb"><span style="font-size:11px;font-weight:900;color:#9ca3af;width:80px;flex-shrink:0;padding-top:2px">${l}</span><span style="font-size:13px;font-weight:700;color:#111">${v||'—'}</span></div>`).join('')}
+  </div>`;
+}
+
+// ── 네비게이션 ──
+function nextStep() {
+  if(!validate()) return;
+  if(currentStep===5){submitForm();return;}
+  currentStep++;
+  if(currentStep===5) renderReview();
+  showStep(currentStep);
+}
+function prevStep() {
+  if(currentStep>1){currentStep--;showStep(currentStep);}
+}
+function showStep(s) {
+  for(let i=1;i<=5;i++) document.getElementById('step'+i).style.display=i===s?'block':'none';
+  document.getElementById('btnBack').style.display=s>1?'inline-flex':'none';
+  const btn=document.getElementById('btnNextText');
+  btn.textContent=s===5?'✨ 최종 제출하기':'다음 단계 →';
+  renderStepIndicator();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ── Firebase 제출 ──
+async function submitForm() {
+  document.getElementById('submitError').style.display='none';
+  const btnNext=document.getElementById('btnNext');
+  btnNext.disabled=true;
+  btnNext.innerHTML='<svg class="spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> &nbsp;Firebase 저장 중...';
+
+  try {
+    const id = 'apply_'+Date.now();
+    const data = {
+      id,
+      position: window._positionLabel || '',
+      positionId: selectedPosition,
+      name: document.getElementById('f_name').value.trim(),
+      birth: document.getElementById('f_birth').value,
+      email: document.getElementById('f_email').value.trim(),
+      phone: document.getElementById('f_phone').value.trim(),
+      address: document.getElementById('f_address').value.trim(),
+      age: Number(document.getElementById('f_age').value)||0,
+      gender: selectedGender,
+      education: document.getElementById('f_education').value,
+      major: document.getElementById('f_major').value,
+      gpa: document.getElementById('f_gpa').value,
+      graduationType: document.getElementById('f_gradType').value,
+      languages: languages.filter(l=>l.name),
+      certs: certs.filter(Boolean),
+      coverLetterText: document.getElementById('f_cover').value,
+      status: '1차합격',
+      appliedDate: new Date().toISOString().split('T')[0],
+      documentScore: Math.floor(Math.random()*16)+80,
+      beptScore: null,
+      beptBreakdown: null,
+      beptProgress: 0,
+      speakingAudioUrl: null,
+      aiAnalysis: null,
+      avatar: `https://picsum.photos/seed/${id}/100/100`,
+      tags: languages.filter(l=>l.name).map(l=>`#${l.name}`),
+      matchScore: Math.floor(Math.random()*21)+75,
+      documents: [],
+      notes: [],
+    };
+
+    await FB.add('applicants', data);
+
+    // 성공 화면
+    document.getElementById('mainForm').style.display='none';
+    const s=document.getElementById('successScreen');
+    s.style.display='flex';
+    document.getElementById('successName').textContent=data.name;
+    document.getElementById('successNameRow').textContent=data.name;
+    document.getElementById('successPosition').textContent=data.position;
+    document.getElementById('successDate').textContent=new Date().toLocaleString('ko-KR',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  } catch(err) {
+    console.error(err);
+    showError('저장 실패: '+err.message+'\n\nFirestore 보안 규칙에서 "테스트 모드"로 설정해 주세요.');
+    btnNext.disabled=false;
+    btnNext.innerHTML='✨ 최종 제출하기';
+  }
+}
+
+function showError(msg){
+  const el=document.getElementById('submitError');
+  el.style.display='block';
+  el.textContent=msg;
+}
+
+// ── 초기화 ──
+renderPositions();
+renderStepIndicator();
+renderLanguages();
+renderCerts();
+</script>
+</body>
+</html>

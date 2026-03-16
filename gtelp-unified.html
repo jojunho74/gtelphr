@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GTELP HR System</title>
+<script>
+// ── Firebase REST API (SDK 없이 직접 통신) ──
+const FB = {
+  projectId: 'gtelphr',
+  apiKey:    'AIzaSyBA5PKAviHX4KD16oU89mEkKeZ1tcCgwSE',
+  baseUrl()  { return `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents`; },
+
+  // Firestore 값 → JS 변환
+  fromValue(v) {
+    if (v.stringValue  !== undefined) return v.stringValue;
+    if (v.integerValue !== undefined) return Number(v.integerValue);
+    if (v.doubleValue  !== undefined) return Number(v.doubleValue);
+    if (v.booleanValue !== undefined) return v.booleanValue;
+    if (v.nullValue    !== undefined) return null;
+    if (v.arrayValue)  return (v.arrayValue.values || []).map(x => FB.fromValue(x));
+    if (v.mapValue)    return FB.fromFields(v.mapValue.fields || {});
+    return null;
+  },
+  fromFields(fields) {
+    const obj = {};
+    for (const k in fields) obj[k] = FB.fromValue(fields[k]);
+    return obj;
+  },
+
+  // JS → Firestore 값 변환
+  toValue(v) {
+    if (v === null || v === undefined) return { nullValue: null };
+    if (typeof v === 'boolean') return { booleanValue: v };
+    if (typeof v === 'number')  return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+    if (typeof v === 'string')  return { stringValue: v };
+    if (Array.isArray(v))       return { arrayValue: { values: v.map(x => FB.toValue(x)) } };
+    if (typeof v === 'object')  return { mapValue: { fields: FB.toFields(v) } };
+    return { stringValue: String(v) };
+  },
+  toFields(obj) {
+    const fields = {};
+    for (const k in obj) fields[k] = FB.toValue(obj[k]);
+    return fields;
+  },
+
+  // 문서 파싱 (name에서 ID 추출)
+  parseDoc(doc) {
+    const id = doc.name.split('/').pop();
+    return { id, ...FB.fromFields(doc.fields || {}) };
+  },
+
+  // 컬렉션 전체 조회
+  async getAll(col) {
+    const res = await fetch(`${FB.baseUrl()}/${col}?key=${FB.apiKey}`);
+    if (!res.ok) throw new Error(`GET 실패: ${res.status}`);
+    const data = await res.json();
+    return (data.documents || []).map(d => FB.parseDoc(d));
+  },
+
+  // 문서 생성 (자동 ID)
+  async add(col, obj) {
+    const res = await fetch(`${FB.baseUrl()}/${col}?key=${FB.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: FB.toFields(obj) })
+    });
+    if (!res.ok) { const e = await res.text(); throw new Error(`ADD 실패: ${e}`); }
+    const doc = await res.json();
+    return FB.parseDoc(doc);
+  },
+
+  // 문서 전체 덮어쓰기 (SET)
+  async set(col, id, obj) {
+    const res = await fetch(`${FB.baseUrl()}/${col}/${id}?key=${FB.apiKey}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: FB.toFields(obj) })
+    });
+    if (!res.ok) { const e = await res.text(); throw new Error(`SET 실패: ${e}`); }
+    return FB.parseDoc(await res.json());
+  },
+
+  // 문서 부분 업데이트 (PATCH with fieldMask)
+  async update(col, id, obj) {
+    const keys = Object.keys(obj);
+    const mask = keys.map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+    const res = await fetch(`${FB.baseUrl()}/${col}/${id}?key=${FB.apiKey}&${mask}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: FB.toFields(obj) })
+    });
+    if (!res.ok) { const e = await res.text(); throw new Error(`UPDATE 실패: ${e}`); }
+    return FB.parseDoc(await res.json());
+  },
+};
+
+window.__fbReady = true;
+console.log('✅ Firebase REST API 준비 완료');
+</script>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fc; margin: 0; }
+.nav-btn { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 14px; font-weight: 800; font-size: 13px; cursor: pointer; border: none; transition: all 0.2s; }
+.nav-btn.active { background: white; color: #4f46e5; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.nav-btn.inactive { background: transparent; color: #9ca3af; }
+.nav-btn:hover:not(.active) { color: #6b7280; }
+.card { background: white; border-radius: 24px; border: 1px solid #f0f0f0; box-shadow: 0 2px 16px rgba(0,0,0,0.04); }
+.stat-card { background: white; border-radius: 20px; border: 1px solid #f0f0f0; padding: 20px; display: flex; align-items: center; gap: 16px; }
+.badge { padding: 4px 10px; border-radius: 10px; font-size: 11px; font-weight: 800; }
+.badge-blue { background: #eff6ff; color: #2563eb; }
+.badge-orange { background: #fff7ed; color: #ea580c; }
+.badge-green { background: #f0fdf4; color: #16a34a; }
+.badge-purple { background: #faf5ff; color: #7c3aed; }
+.badge-gray { background: #f9fafb; color: #6b7280; }
+.tab-btn { padding: 8px 20px; border-radius: 12px; font-weight: 800; font-size: 13px; cursor: pointer; border: none; transition: all 0.2s; }
+.tab-btn.active { background: white; color: #4f46e5; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.tab-btn.inactive { background: transparent; color: #9ca3af; }
+.input { width: 100%; padding: 11px 14px; border-radius: 12px; border: 1.5px solid #e5e7eb; background: #f9fafb; font-size: 13px; font-weight: 500; outline: none; transition: all 0.2s; }
+.input:focus { border-color: #4f46e5; background: white; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+.btn { padding: 10px 20px; border-radius: 12px; font-weight: 800; font-size: 13px; cursor: pointer; border: none; transition: all 0.2s; }
+.btn-indigo { background: #4f46e5; color: white; box-shadow: 0 4px 12px rgba(79,70,229,0.2); }
+.btn-indigo:hover { background: #4338ca; transform: translateY(-1px); }
+.btn-indigo:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-white { background: white; color: #374151; border: 1px solid #e5e7eb; }
+.btn-white:hover { background: #f9fafb; }
+.btn-orange { background: linear-gradient(135deg, #f97316, #f59e0b); color: white; box-shadow: 0 4px 12px rgba(249,115,22,0.25); }
+.btn-orange:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(249,115,22,0.3); }
+.pos-card { border: 2px solid #e5e7eb; border-radius: 16px; padding: 16px; cursor: pointer; transition: all 0.2s; background: white; }
+.pos-card:hover { border-color: #f97316; }
+.pos-card.selected { border-color: #f97316; background: #fff7ed; }
+.step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; flex-shrink: 0; transition: all 0.3s; }
+.step-done { background: #10b981; color: white; }
+.step-active { background: #f97316; color: white; transform: scale(1.1); box-shadow: 0 4px 12px rgba(249,115,22,0.4); }
+.step-todo { background: #f3f4f6; color: #9ca3af; }
+.progress-bar { height: 6px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 999px; transition: width 0.4s; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.pulse { animation: pulse 2s infinite; }
+.modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+tr:hover td { background: #fafafa; }
+.view { display: none; }
+.view.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════ -->
+<header style="background:white;border-bottom:1px solid #f0f0f0;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.04)">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="background:#4f46e5;padding:8px;border-radius:12px;font-size:16px">⚡</div>
+    <span style="font-size:20px;font-weight:900;color:#111">GTELP <span style="color:#4f46e5">HR</span></span>
+    <div id="liveIndicator" style="display:flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 10px;border-radius:20px;margin-left:4px">
+      <div style="width:6px;height:6px;background:#10b981;border-radius:50%" class="pulse"></div>
+      <span style="font-size:10px;font-weight:900;color:#16a34a">LIVE</span>
+    </div>
+  </div>
+  <nav style="display:flex;gap:4px;padding:4px;background:#f9fafb;border-radius:16px;border:1px solid #f0f0f0">
+    <button class="nav-btn active" id="nav_dashboard" onclick="navigate('dashboard')">📋 채용관리</button>
+    <button class="nav-btn inactive" id="nav_talents" onclick="navigate('talents')">👥 인재풀</button>
+    <button class="nav-btn inactive" id="nav_statistics" onclick="navigate('statistics')">📊 통계</button>
+    <button class="nav-btn inactive" id="nav_settings" onclick="navigate('settings')">⚙️ 설정</button>
+  </nav>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span id="syncTime" style="font-size:11px;color:#9ca3af;font-weight:600"></span>
+    <img src="https://picsum.photos/seed/hr/36/36" style="width:36px;height:36px;border-radius:10px;border:2px solid #f0f0f0">
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════
+     VIEW: DASHBOARD
+══════════════════════════════════════════════ -->
+<div class="view active" id="view_dashboard">
+<main style="max-width:1200px;margin:0 auto;padding:28px 20px">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px">
+    <div>
+      <h1 style="font-size:26px;font-weight:900;color:#111;margin:0 0 4px">2026 신입 공채 채용 보드</h1>
+      <p style="color:#9ca3af;font-weight:500;margin:0;font-size:13px">실시간 BEPT 평가 통합 관리</p>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:10px 16px;font-size:12px;font-weight:700;color:#16a34a">🔴 LIVE — Firebase 실시간 수신 중</div>
+  </div>
+
+  <!-- Stats -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px">
+    <div class="stat-card"><div style="background:#eff6ff;padding:10px;border-radius:14px;font-size:20px">👤</div><div><p style="font-size:10px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin:0">총 지원자</p><p style="font-size:24px;font-weight:900;color:#2563eb;margin:2px 0 0"><span id="stat_total">0</span><span style="font-size:12px;opacity:.6">명</span></p></div></div>
+    <div class="stat-card"><div style="background:#f0fdf4;padding:10px;border-radius:14px;font-size:20px">✅</div><div><p style="font-size:10px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin:0">1차 합격</p><p style="font-size:24px;font-weight:900;color:#16a34a;margin:2px 0 0"><span id="stat_first">0</span><span style="font-size:12px;opacity:.6">명</span></p></div></div>
+    <div class="stat-card"><div style="background:#fff7ed;padding:10px;border-radius:14px;font-size:20px">🔄</div><div><p style="font-size:10px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin:0">BEPT 진행</p><p style="font-size:24px;font-weight:900;color:#ea580c;margin:2px 0 0"><span id="stat_bept">0</span><span style="font-size:12px;opacity:.6">명</span></p></div></div>
+    <div class="stat-card"><div style="background:#faf5ff;padding:10px;border-radius:14px;font-size:20px">🏆</div><div><p style="font-size:10px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin:0">BEPT 완료</p><p style="font-size:24px;font-weight:900;color:#7c3aed;margin:2px 0 0"><span id="stat_done">0</span><span style="font-size:12px;opacity:.6">명</span></p></div></div>
+  </div>
+
+  <!-- Search + Filter + Action -->
+  <div class="card" style="padding:16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <div style="position:relative;flex:1;min-width:200px">
+      <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af">🔍</span>
+      <input class="input" id="searchInput" oninput="renderTable()" placeholder="이름 또는 포지션 검색..." style="padding-left:36px">
+    </div>
+    <select class="input" id="filterStatus" onchange="renderTable()" style="width:160px">
+      <option value="">전체 상태</option>
+      <option>서류심사중</option><option>1차합격</option><option>BEPT평가중</option><option>BEPT완료</option><option>실무면접</option>
+    </select>
+    <button class="btn btn-indigo" id="beptBtn" disabled onclick="showBeptModal()">
+      BEPT 일괄 요청 <span id="beptCount" style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:6px;margin-left:4px">0</span>
+    </button>
+    <button class="btn" style="background:#1e1b4b;color:white" onclick="simulateBept()">✨ 평가 시뮬레이션</button>
+  </div>
+
+  <!-- Table -->
+  <div class="card" style="overflow:hidden">
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f9fafb;border-bottom:1px solid #f0f0f0">
+            <th style="padding:14px 16px;text-align:center;width:48px"><input type="checkbox" id="selectAll" onchange="toggleAll(this.checked)" style="width:16px;height:16px;cursor:pointer"></th>
+            <th style="padding:14px 16px;text-align:left;font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">지원자</th>
+            <th style="padding:14px 16px;text-align:left;font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">포지션</th>
+            <th style="padding:14px 16px;text-align:left;font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">상태</th>
+            <th style="padding:14px 16px;text-align:left;font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">BEPT 점수</th>
+            <th style="padding:14px 16px;text-align:left;font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">지원일</th>
+            <th style="padding:14px 16px;text-align:center;font-size:11px;font-weight:900;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">상세</th>
+          </tr>
+        </thead>
+        <tbody id="applicantTable">
+          <tr><td colspan="7" style="padding:48px;text-align:center;color:#d1d5db;font-weight:700">데이터 로딩 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     VIEW: PROFILE
+══════════════════════════════════════════════ -->
+<div class="view" id="view_profile">
+<main style="max-width:900px;margin:0 auto;padding:28px 20px">
+  <button onclick="navigate('dashboard')" style="display:flex;align-items:center;gap:6px;color:#9ca3af;font-weight:800;font-size:13px;border:none;background:none;cursor:pointer;margin-bottom:20px">← 채용관리로 돌아가기</button>
+  <div id="profileContent"></div>
+</main>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     VIEW: TALENTS
+══════════════════════════════════════════════ -->
+<div class="view" id="view_talents">
+<main style="max-width:1200px;margin:0 auto;padding:28px 20px">
+  <h1 style="font-size:26px;font-weight:900;color:#111;margin:0 0 4px">인재풀</h1>
+  <p style="color:#9ca3af;font-weight:500;margin:0 0 24px;font-size:13px">등록된 인재를 관리합니다</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px" id="talentGrid">
+    <div style="color:#d1d5db;text-align:center;padding:40px;grid-column:1/-1;font-weight:700">인재 데이터 준비 중...</div>
+  </div>
+</main>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     VIEW: STATISTICS
+══════════════════════════════════════════════ -->
+<div class="view" id="view_statistics">
+<main style="max-width:1200px;margin:0 auto;padding:28px 20px">
+  <h1 style="font-size:26px;font-weight:900;color:#111;margin:0 0 24px">통계 리포트</h1>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px">
+    <div class="card" style="padding:24px">
+      <h3 style="font-weight:900;color:#111;margin:0 0 20px">채용 전형 퍼널</h3>
+      <div id="funnelChart"></div>
+    </div>
+    <div class="card" style="padding:24px">
+      <h3 style="font-weight:900;color:#111;margin:0 0 20px">BEPT 점수 분포</h3>
+      <div id="scoreChart"></div>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     VIEW: SETTINGS
+══════════════════════════════════════════════ -->
+<div class="view" id="view_settings">
+<main style="max-width:640px;margin:0 auto;padding:28px 20px">
+  <h1 style="font-size:26px;font-weight:900;color:#111;margin:0 0 4px">설정</h1>
+  <p style="color:#9ca3af;margin:0 0 24px;font-size:13px">EmailJS 및 시스템 설정</p>
+  <div class="card" style="padding:28px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div style="background:#eff6ff;padding:10px;border-radius:12px;font-size:20px">✉️</div>
+      <div><h3 style="font-weight:900;color:#111;margin:0">EmailJS 설정</h3><p style="color:#9ca3af;font-size:12px;margin:2px 0 0">실제 이메일 발송 API 키</p></div>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;margin-bottom:16px;font-size:12px;color:#1d4ed8;font-weight:600">
+      💡 <a href="https://www.emailjs.com" target="_blank" style="color:#2563eb">emailjs.com</a>에서 무료 가입 후 키 발급 (월 200건 무료)
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label style="font-size:11px;font-weight:900;color:#6b7280;display:block;margin-bottom:6px">SERVICE ID</label><input class="input" id="s_serviceId" type="password" placeholder="service_xxxxxxx"></div>
+      <div><label style="font-size:11px;font-weight:900;color:#6b7280;display:block;margin-bottom:6px">TEMPLATE ID</label><input class="input" id="s_templateId" type="password" placeholder="template_xxxxxxx"></div>
+      <div><label style="font-size:11px;font-weight:900;color:#6b7280;display:block;margin-bottom:6px">PUBLIC KEY</label><input class="input" id="s_publicKey" type="password" placeholder="xxxxxxxxxxxxxxxx"></div>
+    </div>
+    <button onclick="saveSettings()" class="btn btn-indigo" style="width:100%;margin-top:16px;padding:13px">저장하기</button>
+  </div>
+  <div class="card" style="padding:24px">
+    <h3 style="font-weight:900;color:#111;margin:0 0 16px">시스템 상태</h3>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f9fafb;border-radius:12px">
+        <div><p style="font-weight:800;color:#111;font-size:13px;margin:0">Firebase Firestore</p><p style="color:#9ca3af;font-size:11px;margin:2px 0 0">실시간 DB 연동 (gtelphr)</p></div>
+        <span class="badge badge-green">✓ 연결됨</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f9fafb;border-radius:12px">
+        <div><p style="font-weight:800;color:#111;font-size:13px;margin:0">Claude AI 분석</p><p style="color:#9ca3af;font-size:11px;margin:2px 0 0">Artifact 내장 API</p></div>
+        <span class="badge badge-green">✓ 활성</span>
+      </div>
+      <div id="emailjsStatus" style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f9fafb;border-radius:12px">
+        <div><p style="font-weight:800;color:#111;font-size:13px;margin:0">EmailJS</p><p style="color:#9ca3af;font-size:11px;margin:2px 0 0">미설정</p></div>
+        <span class="badge badge-orange">⚠ 미설정</span>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════ -->
+<!-- BEPT Modal -->
+<div class="modal-bg" id="beptModal" style="display:none">
+  <div style="background:white;border-radius:32px;max-width:480px;width:100%;padding:36px">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:20px">
+      <div style="background:#eff6ff;padding:12px;border-radius:16px;font-size:24px">⚡</div>
+      <button onclick="closeBeptModal()" style="background:none;border:none;font-size:20px;color:#d1d5db;cursor:pointer">✕</button>
+    </div>
+    <h2 style="font-size:22px;font-weight:900;color:#111;margin:0 0 6px">BEPT 평가 일괄 요청</h2>
+    <p style="color:#9ca3af;margin:0 0 20px;font-size:13px">선택한 지원자에게 평가 초대장을 발송합니다</p>
+    <div id="beptList" style="background:#f9fafb;border-radius:14px;padding:12px;margin-bottom:20px;max-height:200px;overflow-y:auto"></div>
+    <div id="beptProgress" style="display:none;text-align:center;margin-bottom:16px">
+      <p style="font-weight:900;color:#4f46e5;font-size:16px" id="beptProgressTxt">전송 중...</p>
+      <div class="progress-bar" style="margin-top:8px"><div class="progress-fill" id="beptProgressBar" style="width:0%;background:#4f46e5"></div></div>
+    </div>
+    <div style="display:flex;gap:10px" id="beptBtns">
+      <button onclick="closeBeptModal()" class="btn btn-white" style="flex:1">취소</button>
+      <button onclick="executeBept()" class="btn btn-indigo" style="flex:2">평가 요청 시작</button>
+    </div>
+  </div>
+</div>
+
+<!-- Notification -->
+<div id="notif" style="display:none;position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:999;background:white;border-radius:16px;padding:14px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.12);display:none;align-items:center;gap:10px;border:1px solid #f0f0f0;min-width:280px">
+  <span id="notifIcon" style="font-size:18px"></span>
+  <span id="notifMsg" style="font-weight:800;font-size:13px;color:#111"></span>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════ -->
+<script>
+// ────────────────────────────────────────────
+// STATE
+// ────────────────────────────────────────────
+let applicants = [];
+let selectedIds = new Set();
+let settings = { serviceId:'', templateId:'', publicKey:'' };
+
+const POSITIONS = [
+  {id:'overseas_sales',label:'해외영업',icon:'🌏'},{id:'marketing',label:'마케팅',icon:'📢'},
+  {id:'developer',label:'개발자',icon:'💻'},{id:'designer',label:'디자이너',icon:'🎨'},
+  {id:'interpreter',label:'통역/번역',icon:'🗣️'},{id:'sales',label:'국내영업',icon:'🤝'},
+];
+const LANG_OPTIONS = ['TOEIC','TOEFL','IELTS','TEPS','OPIc','TOEIC Speaking','HSK','JLPT','기타'];
+const STATUS_BADGE = {
+  '서류심사중':'badge-gray','1차합격':'badge-blue','BEPT평가중':'badge-orange','BEPT완료':'badge-green','실무면접':'badge-purple'
+};
+
+// ────────────────────────────────────────────
+// FIREBASE REST API 헬퍼
+// ────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let pollingTimer = null;
+
+async function startRealtimeListener() {
+  // 즉시 1회 로드
+  await loadApplicants();
+  // 5초 폴링
+  if (pollingTimer) clearInterval(pollingTimer);
+  pollingTimer = setInterval(loadApplicants, 5000);
+}
+
+async function loadApplicants() {
+  try {
+    const docs = await FB.getAll('applicants');
+    docs.sort((a,b) => (b.appliedDate||'') > (a.appliedDate||'') ? 1 : -1);
+    applicants = docs;
+    updateStats();
+    renderTable();
+    updateSyncTime();
+    console.log(`✅ 폴링 업데이트: ${applicants.length}명`);
+  } catch(e) {
+    console.error('loadApplicants 오류:', e);
+    showNotif('Firebase 연결 오류: ' + e.message, 'error');
+  }
+}
+
+async function updateFirebase(id, data) {
+  await FB.update('applicants', id, data);
+  await loadApplicants(); // 즉시 갱신
+}
+
+async function addToFirebase(data) {
+  const doc = await FB.add('applicants', data);
+  await loadApplicants();
+  return doc.id;
+}
+
+// ────────────────────────────────────────────
+// NAVIGATION
+// ────────────────────────────────────────────
+const VIEWS = ['dashboard','talents','statistics','settings','profile'];
+function navigate(view) {
+  VIEWS.forEach(v => {
+    document.getElementById('view_'+v)?.classList.toggle('active', v===view);
+    const nb = document.getElementById('nav_'+v);
+    if (nb) { nb.className = 'nav-btn ' + (v===view?'active':'inactive'); }
+  });
+  if (view==='statistics') renderStats();
+  if (view==='talents') renderTalents();
+}
+
+// ────────────────────────────────────────────
+// DASHBOARD
+// ────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat_total').textContent = applicants.length;
+  document.getElementById('stat_first').textContent = applicants.filter(a=>a.status==='1차합격').length;
+  document.getElementById('stat_bept').textContent = applicants.filter(a=>a.status==='BEPT평가중').length;
+  document.getElementById('stat_done').textContent = applicants.filter(a=>a.status==='BEPT완료').length;
+}
+
+function renderTable() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const filterStatus = document.getElementById('filterStatus').value;
+  const filtered = applicants.filter(a => {
+    const ms = !search || (a.name||'').toLowerCase().includes(search) || (a.position||'').toLowerCase().includes(search);
+    const mf = !filterStatus || a.status === filterStatus;
+    return ms && mf;
+  });
+
+  const tbody = document.getElementById('applicantTable');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:48px;text-align:center;color:#d1d5db;font-weight:700">📭 검색 결과가 없습니다</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(a => {
+    const checked = selectedIds.has(a.id);
+    const canSelect = a.status === '1차합격';
+    return `<tr>
+      <td style="padding:14px 16px;text-align:center">
+        <input type="checkbox" ${checked?'checked':''} ${canSelect?'':'disabled'}
+          onchange="toggleSelect('${a.id}',this.checked)"
+          style="width:16px;height:16px;cursor:${canSelect?'pointer':'not-allowed'};opacity:${canSelect?1:.3}">
+      </td>
+      <td style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <img src="${a.avatar||'https://picsum.photos/seed/'+a.id+'/40/40'}" style="width:40px;height:40px;border-radius:12px;border:2px solid #f0f0f0">
+          <div><p style="font-weight:900;color:#111;margin:0;font-size:14px">${a.name||'—'}</p><p style="font-size:11px;color:#9ca3af;margin:2px 0 0">${a.email||''}</p></div>
+        </div>
+      </td>
+      <td style="padding:14px 16px"><span style="background:#f3f4f6;color:#374151;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700">${a.position||'—'}</span></td>
+      <td style="padding:14px 16px"><span class="badge ${STATUS_BADGE[a.status]||'badge-gray'}">${a.status||'—'}</span></td>
+      <td style="padding:14px 16px;font-weight:900;color:${a.beptScore?'#7c3aed':'#d1d5db'};font-size:${a.beptScore?'18px':'14px'}">${a.beptScore?a.beptScore+' pts':'—'}</td>
+      <td style="padding:14px 16px;font-size:12px;color:#9ca3af;font-weight:600">${a.appliedDate||'—'}</td>
+      <td style="padding:14px 16px;text-align:center">
+        <button onclick="openProfile('${a.id}')" style="background:#eff6ff;color:#4f46e5;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:900;cursor:pointer">상세 →</button>
+      </td>
+    </tr>`;
+  }).join('');
+  updateBeptBtn();
+}
+
+function toggleSelect(id, checked) {
+  if (checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateBeptBtn();
+}
+function toggleAll(checked) {
+  const eligible = applicants.filter(a=>a.status==='1차합격');
+  eligible.forEach(a => checked ? selectedIds.add(a.id) : selectedIds.delete(a.id));
+  renderTable();
+}
+function updateBeptBtn() {
+  const n = selectedIds.size;
+  document.getElementById('beptBtn').disabled = n===0;
+  document.getElementById('beptCount').textContent = n;
+}
+
+function updateSyncTime() {
+  const now = new Date();
+  document.getElementById('syncTime').textContent = now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ────────────────────────────────────────────
+// BEPT MODAL
+// ────────────────────────────────────────────
+function showBeptModal() {
+  const selected = applicants.filter(a=>selectedIds.has(a.id));
+  document.getElementById('beptList').innerHTML = selected.map(a=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:white;border-radius:10px;margin-bottom:6px;border:1px solid #f0f0f0">
+      <div style="display:flex;align-items:center;gap:8px"><div style="width:6px;height:6px;background:#4f46e5;border-radius:50%"></div><span style="font-weight:800;font-size:13px">${a.name}</span></div>
+      <span style="font-size:11px;color:#9ca3af;font-weight:600">${a.position}</span>
+    </div>`).join('');
+  document.getElementById('beptModal').style.display='flex';
+}
+function closeBeptModal() { document.getElementById('beptModal').style.display='none'; }
+
+async function executeBept() {
+  const selected = applicants.filter(a=>selectedIds.has(a.id));
+  document.getElementById('beptBtns').style.display='none';
+  document.getElementById('beptProgress').style.display='block';
+  for (let i=0; i<selected.length; i++) {
+    document.getElementById('beptProgressTxt').textContent = `전송 중 ${i+1}/${selected.length}`;
+    document.getElementById('beptProgressBar').style.width = ((i+1)/selected.length*100)+'%';
+    if (settings.serviceId) {
+      try { await sendEmail({ to_name:selected[i].name, to_email:selected[i].email, position:selected[i].position, message:'BEPT 영어 평가 초대장입니다.' }); } catch(e){}
+    }
+    try { await updateFirebase(selected[i].id, { status:'BEPT평가중', beptProgress:10 }); } catch(e){}
+    await sleep(600);
+  }
+  selectedIds.clear();
+  closeBeptModal();
+  document.getElementById('beptProgress').style.display='none';
+  document.getElementById('beptBtns').style.display='flex';
+  showNotif(`${selected.length}명 BEPT 요청 완료!`, 'success');
+}
+
+async function simulateBept() {
+  const pending = applicants.filter(a=>a.status==='BEPT평가중');
+  if (!pending.length) { showNotif('BEPT 진행 중인 지원자가 없습니다', 'info'); return; }
+  const target = pending[Math.floor(Math.random()*pending.length)];
+  showNotif(`${target.name}님 평가 진행 중...`, 'info');
+  await sleep(2000);
+  const score = Math.floor(Math.random()*151)+800;
+  await updateFirebase(target.id, {
+    status:'BEPT완료', beptScore:score, beptProgress:100,
+    beptBreakdown:{ listening:Math.floor(score*.26), reading:Math.floor(score*.25), writing:Math.floor(score*.25), speaking:Math.floor(score*.24) }
+  });
+  showNotif(`${target.name}님 BEPT 완료! (${score}점)`, 'success');
+}
+
+// ────────────────────────────────────────────
+// PROFILE VIEW
+// ────────────────────────────────────────────
+function openProfile(id) {
+  const a = applicants.find(x=>x.id===id);
+  if (!a) return;
+  navigate('profile');
+  renderProfile(a);
+}
+
+function renderProfile(a) {
+  document.getElementById('profileContent').innerHTML = `
+    <div class="card" style="padding:28px;margin-bottom:20px">
+      <div style="display:flex;align-items:start;gap:20px;flex-wrap:wrap">
+        <img src="${a.avatar||'https://picsum.photos/seed/'+a.id+'/80/80'}" style="width:80px;height:80px;border-radius:20px;border:3px solid white;box-shadow:0 4px 16px rgba(0,0,0,.1)">
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div>
+              <h1 style="font-size:26px;font-weight:900;color:#111;margin:0 0 4px">${a.name||'—'}</h1>
+              <p style="color:#9ca3af;font-size:13px;margin:0">${a.position||''} · ${a.education||''} ${a.major||''}</p>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <span class="badge ${STATUS_BADGE[a.status]||'badge-gray'}">${a.status||'—'}</span>
+                ${a.beptScore?`<span class="badge badge-green">BEPT ${a.beptScore}pts</span>`:''}
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button onclick="profileAnalyze('${a.id}')" class="btn btn-indigo" id="aiBtn_${a.id}">✨ AI 분석</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div class="card" style="padding:20px">
+        <h3 style="font-weight:900;color:#111;margin:0 0 14px;font-size:14px">개인 정보</h3>
+        ${pRow('📧','이메일',a.email)}${pRow('📱','연락처',a.phone)}${pRow('📍','주소',a.address)}${pRow('🎂','생년월일',a.birth)}
+      </div>
+      <div class="card" style="padding:20px">
+        <h3 style="font-weight:900;color:#111;margin:0 0 14px;font-size:14px">학력 및 어학</h3>
+        ${pRow('🎓','학교',a.education?`${a.education} ${a.major||''} (${a.gpa||''})`:null)}
+        ${(a.languages||[]).map(l=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f9fafb"><span style="font-size:12px;font-weight:700;color:#6b7280">${l.name}</span><span style="font-size:12px;font-weight:900;color:#4f46e5">${l.score}</span></div>`).join('')}
+        ${(a.certs||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${a.certs.map(c=>`<span style="background:#eff6ff;color:#4f46e5;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700">${c}</span>`).join('')}</div>`:''}
+      </div>
+    </div>
+
+    ${a.beptScore?`
+    <div class="card" style="padding:24px;margin-bottom:20px">
+      <h3 style="font-weight:900;color:#111;margin:0 0 16px;font-size:14px">BEPT 결과</h3>
+      <div style="text-align:center;margin-bottom:16px"><span style="font-size:48px;font-weight:900;color:#7c3aed">${a.beptScore}</span><span style="color:#9ca3af;font-size:14px;margin-left:4px">pts</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        ${['listening','reading','writing','speaking'].map(k=>`<div style="text-align:center;background:#faf5ff;padding:12px;border-radius:14px"><p style="font-size:18px;font-weight:900;color:#7c3aed;margin:0">${a.beptBreakdown?.[k]||0}</p><p style="font-size:10px;font-weight:900;color:#a78bfa;margin:4px 0 0;text-transform:uppercase">${k==='listening'?'듣기':k==='reading'?'읽기':k==='writing'?'쓰기':'말하기'}</p></div>`).join('')}
+      </div>
+    </div>`:''}
+
+    ${a.coverLetterText?`
+    <div class="card" style="padding:24px;margin-bottom:20px">
+      <h3 style="font-weight:900;color:#111;margin:0 0 12px;font-size:14px">자기소개서</h3>
+      <p style="font-size:13px;color:#374151;line-height:1.8;white-space:pre-wrap">${a.coverLetterText}</p>
+    </div>`:''}
+
+    <div class="card" style="padding:24px" id="aiSection_${a.id}">
+      <h3 style="font-weight:900;color:#111;margin:0 0 12px;font-size:14px">AI 분석</h3>
+      ${a.aiAnalysis ? renderAI(a.aiAnalysis) : `<div style="text-align:center;padding:32px;color:#d1d5db"><p style="font-size:32px;margin:0 0 8px">🧠</p><p style="font-weight:700">AI 분석 결과가 없습니다</p><button onclick="profileAnalyze('${a.id}')" class="btn btn-indigo" style="margin-top:12px">AI 분석 시작</button></div>`}
+    </div>`;
+}
+
+function pRow(icon, label, val) {
+  return `<div style="display:flex;align-items:start;gap:10px;padding:6px 0;border-bottom:1px solid #f9fafb">
+    <span style="font-size:14px">${icon}</span>
+    <div><p style="font-size:10px;font-weight:900;color:#9ca3af;margin:0;text-transform:uppercase">${label}</p><p style="font-size:12px;font-weight:700;color:#111;margin:2px 0 0">${val||'—'}</p></div>
+  </div>`;
+}
+
+function renderAI(ai) {
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <p style="font-size:13px;color:#374151;font-weight:500;margin:0;flex:1">${ai.summary||''}</p>
+      <div style="text-align:center;margin-left:16px"><span style="font-size:36px;font-weight:900;color:#4f46e5">${ai.totalScore||0}</span><span style="display:block;font-size:10px;font-weight:900;color:#9ca3af">점</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:14px">
+        <p style="font-size:11px;font-weight:900;color:#16a34a;margin:0 0 8px">✅ 강점</p>
+        ${(ai.strengths||[]).map(s=>`<p style="font-size:12px;color:#166534;margin:4px 0">• ${s}</p>`).join('')}
+      </div>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:14px">
+        <p style="font-size:11px;font-weight:900;color:#ea580c;margin:0 0 8px">⚠️ 검토사항</p>
+        ${(ai.concerns||[]).map(c=>`<p style="font-size:12px;color:#9a3412;margin:4px 0">• ${c}</p>`).join('')}
+      </div>
+    </div>
+    <div style="background:#f9fafb;border-radius:14px;padding:14px">
+      <p style="font-size:11px;font-weight:900;color:#9ca3af;margin:0 0 8px">💬 면접 추천 질문</p>
+      ${(ai.interviewQuestions||[]).map((q,i)=>`<div style="display:flex;gap:8px;padding:8px;background:white;border-radius:10px;margin-bottom:6px"><span style="color:#4f46e5;font-weight:900;font-size:12px">Q${i+1}</span><p style="font-size:12px;color:#374151;margin:0;line-height:1.5">${q}</p></div>`).join('')}
+    </div>`;
+}
+
+async function profileAnalyze(id) {
+  const a = applicants.find(x=>x.id===id);
+  if (!a) return;
+  const btn = document.getElementById('aiBtn_'+id);
+  if (btn) { btn.disabled=true; btn.textContent='⏳ 분석 중...'; }
+  try {
+    const prompt = `지원자 HR 분석. 이름:${a.name}, 포지션:${a.position}, 학력:${a.education||''} ${a.major||''} GPA:${a.gpa||''}, 어학:${(a.languages||[]).map(l=>l.name+' '+l.score).join(', ')}, 자기소개서:${(a.coverLetterText||'').substring(0,300)}${a.beptScore?`, BEPT:${a.beptScore}점`:''}
+다음 JSON으로만 응답: {"totalScore":85,"grade":"A","summary":"한줄평가","strengths":["강점1","강점2","강점3"],"concerns":["검토1","검토2"],"recommendation":"추천의견","interviewQuestions":["질문1","질문2","질문3"]}`;
+    const res = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:'HR 전문가. JSON으로만 응답.',messages:[{role:'user',content:prompt}]})});
+    const data = await res.json();
+    const raw = data.content?.[0]?.text||'{}';
+    const result = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    await updateFirebase(id, { aiAnalysis: result });
+    const section = document.getElementById('aiSection_'+id);
+    if (section) { section.innerHTML = '<h3 style="font-weight:900;color:#111;margin:0 0 12px;font-size:14px">AI 분석</h3>'+renderAI(result); }
+    showNotif('AI 분석 완료!', 'success');
+  } catch(e) { showNotif('AI 분석 실패: '+e.message, 'error'); }
+  if (btn) { btn.disabled=false; btn.textContent='✨ AI 분석'; }
+}
+
+// ────────────────────────────────────────────
+// (지원접수 폼은 gtelp-apply.html 독립 파일로 분리됨)
+// ────────────────────────────────────────────
+
+// ────────────────────────────────────────────
+// STATISTICS
+// ────────────────────────────────────────────
+function renderStats() {
+  const completed = applicants.filter(a=>a.status==='BEPT완료');
+  const funnel = [
+    {l:'서류 접수',n:applicants.length},
+    {l:'1차 합격',n:applicants.filter(a=>a.status!=='서류심사중').length},
+    {l:'BEPT 완료',n:completed.length},
+    {l:'면접/최종',n:applicants.filter(a=>a.status==='실무면접').length},
+  ];
+  const max = Math.max(...funnel.map(f=>f.n),1);
+  document.getElementById('funnelChart').innerHTML = funnel.map(f=>`
+    <div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;font-weight:700;color:#374151">${f.l}</span><span style="font-size:13px;font-weight:900;color:#111">${f.n}명</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${(f.n/max)*100}%;background:#4f46e5"></div></div>
+    </div>`).join('');
+
+  const dist=[{r:'900+',n:completed.filter(a=>(a.beptScore||0)>=900).length},{r:'850-899',n:completed.filter(a=>(a.beptScore||0)>=850&&(a.beptScore||0)<900).length},{r:'800-849',n:completed.filter(a=>(a.beptScore||0)>=800&&(a.beptScore||0)<850).length},{r:'800미만',n:completed.filter(a=>(a.beptScore||0)<800).length}];
+  const dm=Math.max(...dist.map(d=>d.n),1);
+  document.getElementById('scoreChart').innerHTML = dist.map(d=>`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="font-size:12px;font-weight:700;color:#6b7280;width:56px">${d.r}</span>
+      <div style="flex:1;height:28px;background:#f9fafb;border-radius:8px;overflow:hidden"><div style="height:100%;background:#7c3aed;border-radius:8px;transition:width .5s;width:${(d.n/dm)*100}%"></div></div>
+      <span style="font-size:13px;font-weight:900;color:#111;width:20px;text-align:right">${d.n}</span>
+    </div>`).join('');
+}
+
+// ────────────────────────────────────────────
+// TALENTS
+// ────────────────────────────────────────────
+const INITIAL_TALENTS = [
+  {id:'t1',name:'이서연',category:'마케팅',beptScore:null,experience:'신입',tags:['#마케팅전공','#SNS운영'],availability:'즉시채용',email:'t1@email.com',avatar:'https://picsum.photos/seed/t1/80/80'},
+  {id:'t2',name:'정예준',category:'해외영업',beptScore:855,experience:'경력 3년',tags:['#전시회참가','#B2B'],availability:'협의가능',email:'t2@email.com',avatar:'https://picsum.photos/seed/t2/80/80'},
+  {id:'t3',name:'박서현',category:'개발자',beptScore:790,experience:'경력 2년',tags:['#React','#Node.js'],availability:'즉시채용',email:'t3@email.com',avatar:'https://picsum.photos/seed/t3/80/80'},
+  {id:'t4',name:'김민지',category:'디자이너',beptScore:null,experience:'신입',tags:['#UX/UI','#Figma'],availability:'즉시채용',email:'t4@email.com',avatar:'https://picsum.photos/seed/t4/80/80'},
+];
+function renderTalents() {
+  document.getElementById('talentGrid').innerHTML = INITIAL_TALENTS.map(t=>`
+    <div class="card" style="padding:20px;transition:all .2s;cursor:pointer" onmouseenter="this.style.boxShadow='0 8px 32px rgba(0,0,0,.1)'" onmouseleave="this.style.boxShadow=''">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <img src="${t.avatar}" style="width:52px;height:52px;border-radius:16px;border:2px solid #f0f0f0">
+        <div style="flex:1">
+          <h4 style="font-weight:900;color:#111;margin:0;font-size:14px">${t.name}</h4>
+          <p style="font-size:11px;color:#4f46e5;font-weight:700;margin:2px 0">${t.category}</p>
+          <p style="font-size:11px;color:${t.availability==='즉시채용'?'#10b981':'#f97316'};font-weight:700;margin:0">${t.availability}</p>
+        </div>
+        ${t.beptScore?`<span style="background:#faf5ff;color:#7c3aed;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:900">⭐${t.beptScore}</span>`:'<span style="background:#f9fafb;color:#9ca3af;padding:4px 8px;border-radius:8px;font-size:10px;font-weight:700">평가전</span>'}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+        ${t.tags.map(tag=>`<span style="background:#f3f4f6;color:#6b7280;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;border:1px solid #e5e7eb">${tag}</span>`).join('')}
+      </div>
+      <button onclick="addTalentAsApplicant('${t.id}')" class="btn btn-indigo" style="width:100%;font-size:12px;padding:8px">채용 제안 →</button>
+    </div>`).join('');
+}
+async function addTalentAsApplicant(id) {
+  const t=INITIAL_TALENTS.find(x=>x.id===id);
+  if(!t)return;
+  if(applicants.some(a=>a.email===t.email)){showNotif(`${t.name}님은 이미 등록되어 있습니다`,'info');return;}
+  const newId='talent_'+Date.now();
+  const data={id:newId,name:t.name,position:t.category,email:t.email,status:'1차합격',appliedDate:new Date().toISOString().split('T')[0],beptScore:t.beptScore||null,avatar:t.avatar,tags:t.tags,documentScore:90,beptBreakdown:null,beptProgress:t.beptScore?100:0,aiAnalysis:null,documents:[],notes:[],coverLetterText:'인재풀 채용제안',languages:[],certs:[]};
+  await addToFirebase(data);
+  showNotif(`${t.name}님 채용제안 완료!`,'success');
+}
+
+// ────────────────────────────────────────────
+// SETTINGS
+// ────────────────────────────────────────────
+function saveSettings() {
+  settings = {
+    serviceId:document.getElementById('s_serviceId').value,
+    templateId:document.getElementById('s_templateId').value,
+    publicKey:document.getElementById('s_publicKey').value,
+  };
+  const hasEmail = !!settings.serviceId;
+  document.getElementById('emailjsStatus').innerHTML=`
+    <div><p style="font-weight:800;color:#111;font-size:13px;margin:0">EmailJS</p><p style="color:#9ca3af;font-size:11px;margin:2px 0 0">${hasEmail?'설정 완료':'미설정'}</p></div>
+    <span class="badge ${hasEmail?'badge-green':'badge-orange'}">${hasEmail?'✓ 활성':'⚠ 미설정'}</span>`;
+  showNotif('설정 저장 완료!','success');
+}
+
+async function sendEmail(params) {
+  if(!settings.serviceId)throw new Error('EmailJS 미설정');
+  const res=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:settings.serviceId,template_id:settings.templateId,user_id:settings.publicKey,template_params:params})});
+  if(!res.ok)throw new Error('발송 실패');
+}
+
+// ────────────────────────────────────────────
+// NOTIFICATION
+// ────────────────────────────────────────────
+let notifTimer;
+function showNotif(msg, type='info') {
+  const icons={success:'✅',error:'❌',info:'ℹ️'};
+  const el=document.getElementById('notif');
+  document.getElementById('notifIcon').textContent=icons[type]||'ℹ️';
+  document.getElementById('notifMsg').textContent=msg;
+  el.style.display='flex';
+  clearTimeout(notifTimer);
+  notifTimer=setTimeout(()=>el.style.display='none',3500);
+}
+
+// ────────────────────────────────────────────
+// INIT
+// ────────────────────────────────────────────
+startRealtimeListener();
+</script>
+</body>
+</html>
