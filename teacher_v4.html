@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>강사 평가 관리 보드</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#F8F9FB;color:#1A2E4A;min-height:100vh}
+button{cursor:pointer;font-family:inherit}
+input{font-family:inherit;outline:none;box-sizing:border-box}
+table{border-collapse:collapse;width:100%}
+.nav{background:#fff;border-bottom:1px solid #EBEBEB;padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:10}
+.nav-btn{background:transparent;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;color:#888;transition:all .15s}
+.nav-btn.active{background:#1A2E4A;color:#fff}
+.content{padding:28px 32px 60px}
+.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px}
+.summary-card{background:#fff;border:1px solid #EBEBEB;border-radius:14px;padding:16px 18px;display:flex;align-items:center;gap:12px}
+.summary-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.card{background:#fff;border:1px solid #EBEBEB;border-radius:14px;padding:20px 22px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:700;color:#1A2E4A;margin-bottom:14px}
+.tab-row{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.tab-btn{background:#fff;border:1px solid #EBEBEB;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;color:#666}
+.tab-btn.active{background:#1A2E4A;color:#fff;border-color:#1A2E4A}
+.badge{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700}
+.tbl-wrap{background:#fff;border:1px solid #EBEBEB;border-radius:14px;overflow:auto}
+th{padding:11px 12px;font-size:11px;font-weight:600;color:#999;text-align:left;white-space:nowrap;background:#F8F9FB}
+td{padding:11px 12px;border-top:1px solid #F4F4F4;font-size:13px;vertical-align:middle}
+tr:hover td{background:#FAFAFA}
+.avatar{width:32px;height:32px;border-radius:50%;background:#E6F1FB;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#0C447C;flex-shrink:0}
+.score-cell{display:inline-block;min-width:30px;text-align:center;padding:2px 7px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
+.score-input{width:44px;height:26px;text-align:center;border:2px solid #1A2E4A;border-radius:5px;font-size:13px;font-weight:700;padding:0}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:18px;padding:26px;max-width:500px;width:92%;border:1px solid #EBEBEB;max-height:90vh;overflow-y:auto}
+.section{display:none}
+.section.active{display:block}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.course-card{border:1px solid #EBEBEB;border-radius:10px;padding:13px 14px;background:#FAFAFA}
+.course-card.urgent{border-color:#F09595;background:#FCEBEB}
+.course-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.progress-bar{height:8px;background:#F0F0F0;border-radius:99px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:99px;transition:width .6s}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div style="display:flex;gap:4px" id="nav-btns">
+    <button class="nav-btn active" data-menu="grade">강사 등급 명단</button>
+    <button class="nav-btn" data-menu="eval">평가지 관리</button>
+    <button class="nav-btn" data-menu="stats">통계</button>
+    <button class="nav-btn" data-menu="course">코스웨어 추천</button>
+    <button class="nav-btn" data-menu="perf" style="position:relative">성과관리
+      <span style="position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:#E24B4A"></span>
+    </button>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <span class="live-dot"></span>
+    <span style="font-size:12px;color:#999">LIVE — 실시간 수신 중</span>
+  </div>
+</div>
+
+<div class="content">
+  <div style="font-size:24px;font-weight:700;color:#1A2E4A;margin-bottom:4px">강사 평가 관리 보드</div>
+  <div style="font-size:13px;color:#aaa;margin-bottom:22px">평가지 1~5 통합 관리 · 합격 기준 80점</div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-icon" style="background:#E6F1FB">👤</div>
+      <div><div style="font-size:12px;color:#999">총 강사</div><div id="sc-total" style="font-size:22px;font-weight:700;color:#0C447C">0명</div></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon" style="background:#EAF3DE">✅</div>
+      <div><div style="font-size:12px;color:#999">전체 제출 완료</div><div id="sc-submitted" style="font-size:22px;font-weight:700;color:#27500A">0명</div></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon" style="background:#FAEEDA">🔄</div>
+      <div><div style="font-size:12px;color:#999">제출 진행중</div><div id="sc-partial" style="font-size:22px;font-weight:700;color:#633806">0명</div></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon" style="background:#EEEDFE">🏆</div>
+      <div><div style="font-size:12px;color:#999">합격 (80점↑)</div><div id="sc-pass" style="font-size:22px;font-weight:700;color:#3C3489">0명</div></div>
+    </div>
+  </div>
+
+  <!-- 강사 등급 명단 -->
+  <div id="sec-grade" class="section active">
+    <div class="tab-row">
+      <input id="search-input" placeholder="강사명 또는 과목 검색..." style="height:36px;padding:0 12px;border:1px solid #EBEBEB;border-radius:9px;font-size:13px;width:240px">
+      <div style="display:flex;gap:5px" id="grade-tabs"></div>
+      <button id="add-btn" style="margin-left:auto;background:#E8A020;color:#fff;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700">+ 평가 결과 입력</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>순위</th><th>강사</th><th>과목</th><th>상태</th>
+          <th>평가지1</th><th>평가지2</th><th>평가지3</th><th>평가지4</th><th>평가지5</th>
+          <th>합계</th><th>등급</th><th>합격</th><th>상세</th>
+        </tr></thead>
+        <tbody id="grade-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 평가지 관리 -->
+  <div id="sec-eval" class="section">
+    <div class="tab-row" id="eval-sheet-tabs"></div>
+    <div class="tbl-wrap">
+      <div style="padding:13px 18px;border-bottom:1px solid #F0F0F0;display:flex;justify-content:space-between;align-items:center">
+        <span id="eval-sheet-title" style="font-size:14px;font-weight:700;color:#1A2E4A"></span>
+        <span style="font-size:11px;color:#bbb">셀 클릭 시 수정 가능</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>순위</th><th>강사</th><th>과목</th><th id="eval-score-head">점수</th>
+          <th>제출 상태</th><th>제출일</th><th>전체 합계</th><th>등급</th>
+        </tr></thead>
+        <tbody id="eval-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 통계 -->
+  <div id="sec-stats" class="section">
+    <div class="stats-grid">
+      <div class="card">
+        <div class="card-title">등급 분포</div>
+        <div style="display:flex;align-items:center;gap:20px">
+          <canvas id="donut-canvas" width="110" height="110" style="flex-shrink:0"></canvas>
+          <div id="donut-legend" style="flex:1;display:flex;flex-direction:column;gap:7px"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">합격 현황 (80점 기준)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+          <div style="background:#EAF3DE;border-radius:10px;padding:14px;text-align:center">
+            <div style="font-size:11px;color:#3B6D11">합격</div>
+            <div id="stat-pass" style="font-size:26px;font-weight:700;color:#27500A">0명</div>
+          </div>
+          <div style="background:#FCEBEB;border-radius:10px;padding:14px;text-align:center">
+            <div style="font-size:11px;color:#A32D2D">불합격</div>
+            <div id="stat-fail" style="font-size:26px;font-weight:700;color:#501313">0명</div>
+          </div>
+          <div style="background:#F1EFE8;border-radius:10px;padding:14px;text-align:center">
+            <div style="font-size:11px;color:#5F5E5A">미제출</div>
+            <div id="stat-none" style="font-size:26px;font-weight:700;color:#2C2C2A">0명</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+          <span style="font-size:11px;color:#aaa">합격률</span>
+          <span id="pass-rate-label" style="font-size:12px;font-weight:700;color:#27500A">0%</span>
+        </div>
+        <div class="progress-bar"><div id="pass-rate-bar" class="progress-fill" style="background:#3B6D11;width:0%"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">평가지별 평균 점수 <span style="font-size:11px;color:#bbb;font-weight:400">(만점 20점)</span></div>
+      <canvas id="bar-canvas" height="160" style="width:100%"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">분기별 합격률 추이</div>
+      <canvas id="line-canvas" height="140" style="width:100%"></canvas>
+    </div>
+  </div>
+
+  <!-- 코스웨어 추천 -->
+  <div id="sec-course" class="section">
+
+    <div class="tab-row" id="course-filter-tabs" style="margin-bottom:20px"></div>
+
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start">
+
+      <!-- 왼쪽: 입력 폼 -->
+      <div class="card" style="margin-bottom:0;position:sticky;top:72px">
+        <div style="font-size:14px;font-weight:700;color:#1A2E4A;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #F0F0F0">개인별 코스웨어 추천</div>
+
+        <!-- 강사 정보 요약 -->
+        <div id="cf-info" style="background:#F8F9FB;border-radius:10px;padding:10px 13px;margin-bottom:14px;display:none">
+          <div style="display:flex;align-items:center;gap:9px">
+            <div id="cf-avatar" class="avatar" style="width:34px;height:34px;font-size:11px"></div>
+            <div><div id="cf-iname" style="font-size:13px;font-weight:700;color:#1A2E4A"></div><div id="cf-imeta" style="font-size:11px;color:#aaa"></div></div>
+          </div>
+        </div>
+
+        <!-- 등급 트랙 -->
+        <div style="margin-bottom:13px">
+          <label style="font-size:10px;color:#999;display:block;margin-bottom:6px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">강사 등급 트랙</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px" id="cf-grade-btns">
+            <button class="cf-gb" data-grade="신입" style="background:#F1EFE8;color:#5F5E5A;border:1.5px solid transparent;border-radius:8px;padding:8px 6px;font-size:11px;font-weight:700">신입 강사</button>
+            <button class="cf-gb" data-grade="준전임" style="background:#E1F5EE;color:#1D9E75;border:1.5px solid transparent;border-radius:8px;padding:8px 6px;font-size:11px;font-weight:700">준전임 강사</button>
+            <button class="cf-gb" data-grade="전임" style="background:#E6F1FB;color:#185FA5;border:1.5px solid transparent;border-radius:8px;padding:8px 6px;font-size:11px;font-weight:700">전임 강사</button>
+            <button class="cf-gb" data-grade="마스터" style="background:#FAEEDA;color:#BA7517;border:1.5px solid transparent;border-radius:8px;padding:8px 6px;font-size:11px;font-weight:700">마스터 강사</button>
+          </div>
+        </div>
+
+        <!-- 평가지 점수 -->
+        <div style="margin-bottom:13px">
+          <label style="font-size:10px;color:#999;display:block;margin-bottom:6px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">평가지별 점수 (자동 반영)</label>
+          <div id="cf-score-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px"></div>
+        </div>
+
+        <!-- 개선 목표 -->
+        <div style="margin-bottom:13px">
+          <label style="font-size:10px;color:#999;display:block;margin-bottom:6px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">이번 분기 개선 목표</label>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <button class="cf-goal" data-goal="이탈률 감소" style="background:#fff;border:1px solid #EBEBEB;border-radius:7px;padding:7px 11px;font-size:12px;color:#666;text-align:left">이탈률 감소 우선</button>
+            <button class="cf-goal" data-goal="성적 향상" style="background:#fff;border:1px solid #EBEBEB;border-radius:7px;padding:7px 11px;font-size:12px;color:#666;text-align:left">성적 향상 집중</button>
+            <button class="cf-goal" data-goal="협업 강화" style="background:#fff;border:1px solid #EBEBEB;border-radius:7px;padding:7px 11px;font-size:12px;color:#666;text-align:left">팀 협업 강화</button>
+            <button class="cf-goal" data-goal="전반 역량" style="background:#fff;border:1px solid #EBEBEB;border-radius:7px;padding:7px 11px;font-size:12px;color:#666;text-align:left">전반적 역량 강화</button>
+          </div>
+        </div>
+
+        <!-- 관리자 메모 -->
+        <div style="margin-bottom:14px">
+          <label style="font-size:10px;color:#999;display:block;margin-bottom:6px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">관리자 메모 (선택)</label>
+          <textarea id="cf-memo" placeholder="예: 신입 배정 제한 해제 목표 / 학부모 불만 이력 있음" style="width:100%;height:68px;border:1px solid #EBEBEB;border-radius:8px;padding:8px 10px;font-size:12px;font-family:inherit;resize:none;line-height:1.5;color:#333"></textarea>
+        </div>
+
+        <button id="cf-run" style="width:100%;background:#1A2E4A;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:700">AI 코스웨어 추천 생성</button>
+        <div id="cf-hint" style="font-size:11px;color:#bbb;text-align:center;margin-top:7px">강사 선택 후 등급·목표를 설정하세요</div>
+      </div>
+
+      <!-- 오른쪽: 결과 -->
+      <div id="cf-result-area">
+        <div id="cf-empty" style="background:#fff;border:1px solid #EBEBEB;border-radius:14px;padding:56px 32px;text-align:center">
+          <div style="font-size:28px;margin-bottom:10px">🎯</div>
+          <div style="font-size:14px;font-weight:700;color:#1A2E4A;margin-bottom:6px">개인별 맞춤 코스웨어 추천</div>
+          <div style="font-size:13px;color:#aaa;line-height:1.7">강사를 선택하고 등급 트랙 · 개선 목표를 설정한 후<br>AI 추천 버튼을 눌러주세요</div>
+        </div>
+        <div id="cf-loading" style="display:none;background:#fff;border:1px solid #EBEBEB;border-radius:14px;padding:56px 32px;text-align:center">
+          <div style="display:inline-flex;gap:5px;margin-bottom:12px">
+            <span style="width:8px;height:8px;border-radius:50%;background:#1A2E4A;animation:cfDot 1.2s infinite"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:#1A2E4A;animation:cfDot 1.2s .2s infinite"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:#1A2E4A;animation:cfDot 1.2s .4s infinite"></span>
+          </div>
+          <div style="font-size:13px;color:#aaa">AI가 개인 데이터를 분석하고 최적 코스웨어를 추천 중...</div>
+        </div>
+        <div id="cf-result" style="display:none"></div>
+      </div>
+    </div>
+    <style>
+    @keyframes cfDot{0%,80%,100%{opacity:.15}40%{opacity:1}}
+    .cf-gb.selected{border-color:#1A2E4A!important;box-shadow:0 0 0 2px #1A2E4A22}
+    .cf-goal.selected{background:#E6F1FB!important;border-color:#185FA5!important;color:#0C447C!important;font-weight:700}
+    </style>
+  </div>
+</div>
+
+<!-- ═══ 성과관리 섹션 ═══ -->
+<div id="sec-perf" class="section">
+
+  <!-- 이탈률 KPI 상단 배너 -->
+  <div style="background:#FCEBEB;border:1px solid #F09595;border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px">
+    <div style="width:36px;height:36px;border-radius:50%;background:#E24B4A;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <span style="color:#fff;font-size:16px;font-weight:700">!</span>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:700;color:#791F1F;margin-bottom:2px">최우선 KPI — 입회 1달 이탈률 감소 목표</div>
+      <div style="font-size:12px;color:#A32D2D">현재 D+3/7/14 프로토콜 미이행 강사 <span id="perf-risk-count" style="font-weight:700">0명</span> · Action Plan 진행률 40% 미만 강사 <span id="perf-low-ap" style="font-weight:700">0명</span></div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:22px;font-weight:700;color:#A32D2D" id="perf-churn-rate">—</div>
+      <div style="font-size:11px;color:#A32D2D">목표: −30%</div>
+    </div>
+  </div>
+
+  <!-- 서브탭 -->
+  <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+    <button class="perf-sub active" data-sub="action" style="background:#1A2E4A;color:#fff;border:1px solid #1A2E4A;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700">90일 Action Plan</button>
+    <button class="perf-sub" data-sub="growth" style="background:#fff;color:#666;border:1px solid #EBEBEB;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700">분기 성장 비교</button>
+    <button class="perf-sub" data-sub="alert" style="background:#fff;color:#666;border:1px solid #EBEBEB;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700">목표 알림</button>
+    <button class="perf-sub" data-sub="feed" style="background:#fff;color:#666;border:1px solid #EBEBEB;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700">노하우 피드</button>
+  </div>
+
+  <!-- 서브섹션 컨테이너 -->
+  <div id="perf-sub-content"></div>
+
+</div>
+<div class="modal-bg" id="ai-modal">
+  <div class="modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div class="avatar" id="ai-avatar" style="width:42px;height:42px;font-size:13px"></div>
+        <div><div id="ai-name" style="font-size:15px;font-weight:700;color:#1A2E4A"></div><div id="ai-sub" style="font-size:11px;color:#bbb"></div></div>
+      </div>
+      <button id="ai-close" style="background:#F0F0F0;border:none;border-radius:8px;width:30px;height:30px;font-size:15px;color:#666">✕</button>
+    </div>
+    <div id="ai-scores" style="display:flex;gap:7px;margin-bottom:14px"></div>
+    <div style="background:#F8F9FB;border-radius:11px;padding:14px 16px;min-height:110px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:9px">
+        <span class="live-dot"></span>
+        <span style="font-size:12px;font-weight:700;color:#555">AI 종합 분석</span>
+        <span id="ai-loading-txt" style="font-size:10px;color:#bbb"></span>
+      </div>
+      <p id="ai-text" style="font-size:13px;color:#444;line-height:1.7;margin:0"></p>
+    </div>
+  </div>
+</div>
+
+<!-- 평가 입력 모달 -->
+<div class="modal-bg" id="eval-modal">
+  <div class="modal" style="max-width:400px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <span style="font-size:15px;font-weight:700;color:#1A2E4A">평가 결과 입력</span>
+      <button id="eval-close" style="background:#F0F0F0;border:none;border-radius:8px;width:30px;height:30px;font-size:15px;color:#666">✕</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:#999;display:block;margin-bottom:5px">강사명</label>
+      <input id="ef-name" placeholder="강사명 입력" style="width:100%;height:36px;border:1px solid #EBEBEB;border-radius:9px;padding:0 11px;font-size:13px">
+    </div>
+    <div id="ef-sheet-inputs"></div>
+    <button id="ef-submit" style="width:100%;background:#1A2E4A;color:#fff;border:none;border-radius:10px;padding:11px;font-size:14px;font-weight:700;margin-top:6px">제출하기</button>
+  </div>
+</div>
+
+<script>
+(function() {
+
+var PASS_SCORE = 80;
+var GRADE_CONFIG = {
+  S:{color:"#BA7517",bg:"#FAEEDA",text:"#633806"},
+  A:{color:"#185FA5",bg:"#E6F1FB",text:"#0C447C"},
+  B:{color:"#3B6D11",bg:"#EAF3DE",text:"#27500A"},
+  C:{color:"#5F5E5A",bg:"#F1EFE8",text:"#2C2C2A"},
+  D:{color:"#A32D2D",bg:"#FCEBEB",text:"#501313"},
+};
+var SHEET_LABELS = {1:"강의역량",2:"수업설계",3:"교수법실기",4:"성적향상률",5:"학생만족도"};
+
+var instructors = [
+  {id:1,name:"김수현",initials:"김수",subject:"수학",scores:{1:18,2:17,3:19,4:16,5:18},submittedAt:"2026-03-10"},
+  {id:2,name:"이지호",initials:"이지",subject:"국어",scores:{1:20,2:19,3:20,4:18,5:19},submittedAt:"2026-03-11"},
+  {id:3,name:"박민서",initials:"박민",subject:"영어",scores:{1:14,2:13,3:15,4:12,5:14},submittedAt:"2026-03-09"},
+  {id:4,name:"최예린",initials:"최예",subject:"과학",scores:{1:16,2:15,3:17,4:16,5:15},submittedAt:"2026-03-12"},
+  {id:5,name:"정도윤",initials:"정도",subject:"수학",scores:{1:null,2:null,3:null,4:null,5:null},submittedAt:null},
+  {id:6,name:"한소영",initials:"한소",subject:"국어",scores:{1:19,2:18,3:null,4:null,5:null},submittedAt:null},
+  {id:7,name:"오재원",initials:"오재",subject:"영어",scores:{1:11,2:10,3:12,4:11,5:10},submittedAt:"2026-03-08"},
+];
+
+var AI_SUMMARIES = {
+  1:"수학 담당 김수현 강사는 평가지 1~5 전반에 걸쳐 안정적인 점수(88/100)를 기록했습니다. 특히 평가지 3(교수법 실기)에서 만점을 획득하며 강의 전달력이 탁월함을 보였습니다. A등급을 유지하고 있으며 다음 분기 프리미엄 반 배정 우선 대상입니다.",
+  2:"국어 담당 이지호 강사는 5개 평가지 합산 96점으로 전체 1위를 기록 중입니다. 모든 항목에서 18점 이상을 획득하며 균형 잡힌 역량을 입증했습니다. S등급 기준을 충족하며 신규 강사 멘토 자격 부여가 권장됩니다.",
+  3:"영어 담당 박민서 강사는 합산 68점으로 C등급에 해당합니다. 평가지 4(성적향상률)에서 12점으로 가장 낮은 점수를 기록했습니다. 집중 개선 프로그램 의무 참여 및 90일 Action Plan 수립이 필요합니다.",
+  4:"과학 담당 최예린 강사는 합산 79점으로 합격선(80점)에 1점 미달합니다. 전 항목 고르게 응시하였으며 분기별 워크숍 참여를 통한 점수 향상이 기대됩니다.",
+  5:"수학 담당 정도윤 강사는 아직 평가지를 제출하지 않았습니다. 제출 기한 내 평가 양식 작성을 독려해 주세요.",
+  6:"국어 담당 한소영 강사는 평가지 1~2 제출 완료, 3~5 미제출 상태입니다. 현재까지 37점 기록 중이며 나머지 평가지 제출 후 최종 등급이 확정됩니다.",
+  7:"영어 담당 오재원 강사는 합산 54점으로 D등급에 해당합니다. 기초 재교육 프로그램 의무 참여 및 전담 멘토 배정이 필요합니다.",
+};
+
+var COURSEWARE_DB = {
+  S:[{title:"멘토링 리더십 심화",tag:"리더십",desc:"신규 강사 코칭 및 멘토 역할 강화",hours:"8h",level:"심화"},
+     {title:"콘텐츠 제작 마스터클래스",tag:"콘텐츠",desc:"프리미엄 강의 영상 기획·편집·배포 전 과정",hours:"12h",level:"심화"},
+     {title:"수능 트렌드 리서치",tag:"전문성",desc:"최신 수능 출제 경향 분석 및 교재 개발 방법론",hours:"6h",level:"심화"}],
+  A:[{title:"고난도 교수법 워크숍",tag:"교수법",desc:"상위권 학생 맞춤 고난도 문제 접근법 및 풀이 전략",hours:"10h",level:"심화"},
+     {title:"학습 동기 설계론",tag:"학생관리",desc:"학생 내적 동기를 높이는 수업 설계 기법",hours:"8h",level:"중급"}],
+  B:[{title:"강의력 향상 워크숍",tag:"강의역량",desc:"발표 스킬, 판서 전략, 피드백 기술 집중 실습",hours:"8h",level:"기본"},
+     {title:"수업 설계 실전",tag:"수업설계",desc:"커리큘럼 구성과 수업 목표 설정 실습",hours:"6h",level:"기본"}],
+  C:[{title:"기초 교수법 집중반",tag:"교수법",desc:"수업 전달력 향상을 위한 핵심 교수법 집중 훈련",hours:"16h",level:"기초",urgent:true},
+     {title:"학생 성적 향상 전략",tag:"성적관리",desc:"수강생 성취도 진단과 개별 피드백 방법론",hours:"12h",level:"기초",urgent:true},
+     {title:"강사 역량 재점검",tag:"역량진단",desc:"90일 Action Plan 연계 자기 진단 및 목표 설정",hours:"4h",level:"기초"}],
+  D:[{title:"강의 기초 재교육",tag:"기초",desc:"강의 전달, 시간 관리, 학생 소통의 기본기 전면 재점검",hours:"24h",level:"기초",urgent:true},
+     {title:"1:1 멘토 코칭 프로그램",tag:"코칭",desc:"전담 멘토 배정 후 주간 피드백 세션 진행",hours:"20h",level:"기초",urgent:true},
+     {title:"교수법 기초반",tag:"교수법",desc:"수업 구조화, 핵심 전달, Q&A 처리 기법",hours:"12h",level:"기초",urgent:true}],
+};
+
+var WEAK_COURSES = {
+  1:{title:"강의역량 집중 훈련",tag:"강의역량",desc:"취약 항목: 강의역량. 발성, 판서, 수업 흐름 제어 집중 실습"},
+  2:{title:"수업 설계 특강",tag:"수업설계",desc:"취약 항목: 수업설계. 커리큘럼 기획부터 평가 설계까지 실전 과정"},
+  3:{title:"교수법 실기 특훈",tag:"교수법실기",desc:"취약 항목: 교수법실기. 강의 시연 + 전문가 피드백 포함"},
+  4:{title:"성적 향상 솔루션",tag:"성적향상",desc:"취약 항목: 성적향상률. 학생 진단-처방-피드백 사이클 집중"},
+  5:{title:"학생 만족도 향상반",tag:"학생소통",desc:"취약 항목: 학생만족도. 라포 형성, 동기 부여, 상담 기술"},
+};
+
+var QUARTERLY_DATA = [
+  {q:"2025 Q2",passRate:52},{q:"2025 Q3",passRate:60},
+  {q:"2025 Q4",passRate:68},{q:"2026 Q1",passRate:72},
+];
+
+var activeMenu = "grade";
+var activeGradeTab = "전체";
+var activeEvalTab = 1;
+var activeCourseTarget = null; // 하위 호환용 (미사용)
+var cfSelectedId = null;
+var cfSelectedGrade = null;
+var cfSelectedGoal = null;
+var aiTimer = null;
+
+// ── 순수 함수: 데이터 계산
+function getTotal(scores) {
+  var vals = [1,2,3,4,5].map(function(k){return scores[k];}).filter(function(v){return v!==null&&v!==""&&v!==undefined;});
+  if (vals.length === 0) return null;
+  return vals.reduce(function(a,b){return a+Number(b);}, 0);
+}
+
+function getGrade(t) {
+  if (t === null || t === undefined) return null;
+  if (t >= 95) return "S";
+  if (t >= 85) return "A";
+  if (t >= 75) return "B";
+  if (t >= 60) return "C";
+  return "D";
+}
+
+function getWeakSheet(scores) {
+  var minVal = Infinity, minKey = null;
+  for (var k = 1; k <= 5; k++) {
+    if (scores[k] !== null && scores[k] !== "" && scores[k] !== undefined && Number(scores[k]) < minVal) {
+      minVal = Number(scores[k]); minKey = k;
+    }
+  }
+  return minKey;
+}
+
+function getRanked() {
+  return instructors.map(function(i) {
+    var t = getTotal(i.scores);
+    return Object.assign({}, i, {total: t, grade: getGrade(t)});
+  }).sort(function(a, b) {
+    return (b.total !== null ? b.total : -1) - (a.total !== null ? a.total : -1);
+  });
+}
+
+function recommendCourses(inst) {
+  var grade = inst.grade;
+  if (!grade) return [];
+  var base = COURSEWARE_DB[grade] || [];
+  var weakSheet = getWeakSheet(inst.scores);
+  var isWeak = grade === "D" || grade === "C";
+  var weakCourse = (weakSheet && WEAK_COURSES[weakSheet])
+    ? [Object.assign({}, WEAK_COURSES[weakSheet], {hours:"10h", level:isWeak?"기초":"기본"})]
+    : [];
+  var combined = weakCourse.concat(base);
+  var seen = {};
+  return combined.filter(function(c) {
+    if (seen[c.title]) return false;
+    seen[c.title] = true; return true;
+  }).slice(0, 4);
+}
+
+// ── HTML 헬퍼
+function gradeBadge(grade) {
+  if (!grade) return '<span style="font-size:12px;color:#ccc">—</span>';
+  var g = GRADE_CONFIG[grade];
+  return '<span class="badge" style="background:'+g.bg+';color:'+g.text+';border:1px solid '+g.color+'40">'+grade+'</span>';
+}
+
+function statusBadge(inst) {
+  var vals = [1,2,3,4,5].map(function(k){return inst.scores[k];});
+  var allDone = vals.every(function(v){return v!==null&&v!==undefined&&v!==""});
+  var noneDone = vals.every(function(v){return v===null||v===undefined||v===""});
+  if (allDone) return '<span class="badge" style="background:#EAF3DE;color:#27500A">제출완료</span>';
+  if (noneDone) return '<span class="badge" style="background:#FCEBEB;color:#A32D2D">미제출</span>';
+  return '<span class="badge" style="background:#FAEEDA;color:#633806">진행중</span>';
+}
+
+function scoreCell(instId, sheet, val) {
+  if (val === null || val === undefined || val === "") {
+    return '<span class="score-cell" style="background:#F4F4F4;color:#ccc" data-id="'+instId+'" data-sheet="'+sheet+'">—</span>';
+  }
+  var n = Number(val);
+  var bg = n>=16?"#EAF3DE":n>=12?"#FAEEDA":"#FCEBEB";
+  var tc = n>=16?"#27500A":n>=12?"#633806":"#A32D2D";
+  return '<span class="score-cell" style="background:'+bg+';color:'+tc+'" data-id="'+instId+'" data-sheet="'+sheet+'">'+n+'</span>';
+}
+
+// ── 요약 카드 업데이트
+function updateSummary() {
+  var ranked = getRanked();
+  var total = instructors.length;
+  var submitted = instructors.filter(function(i){
+    return [1,2,3,4,5].every(function(k){var v=i.scores[k];return v!==null&&v!==undefined&&v!==""});
+  }).length;
+  var partial = instructors.filter(function(i){
+    var vals = [1,2,3,4,5].map(function(k){return i.scores[k];});
+    return vals.some(function(v){return v!==null&&v!==undefined&&v!==""}) &&
+           vals.some(function(v){return v===null||v===undefined||v===""});
+  }).length;
+  var pass = ranked.filter(function(i){return i.total!==null&&i.total>=PASS_SCORE;}).length;
+  document.getElementById("sc-total").textContent = total+"명";
+  document.getElementById("sc-submitted").textContent = submitted+"명";
+  document.getElementById("sc-partial").textContent = partial+"명";
+  document.getElementById("sc-pass").textContent = pass+"명";
+}
+
+// ── 등급 명단 렌더
+function renderGradeTabs() {
+  var tabs = ["전체","S","A","B","C","D"];
+  document.getElementById("grade-tabs").innerHTML = tabs.map(function(t) {
+    return '<button class="tab-btn'+(activeGradeTab===t?" active":"")+'" data-grade="'+t+'">'+t+'</button>';
+  }).join("");
+}
+
+function renderGradeTable() {
+  var ranked = getRanked();
+  var query = document.getElementById("search-input").value || "";
+  var filtered = ranked.filter(function(i) {
+    var gm = activeGradeTab === "전체" || i.grade === activeGradeTab;
+    var sm = !query || i.name.indexOf(query) >= 0 || i.subject.indexOf(query) >= 0;
+    return gm && sm;
+  });
+  var html = filtered.map(function(inst) {
+    var rankIdx = ranked.indexOf(inst) + 1;
+    var total = inst.total;
+    var pass = total !== null && total >= PASS_SCORE;
+    var rankColor = rankIdx <= 3 && total !== null ? "#BA7517" : "#ccc";
+    var totalColor = total === null ? "#ccc" : pass ? "#185FA5" : "#A32D2D";
+    var passBadge = total !== null
+      ? '<span class="badge" style="background:'+(pass?"#EAF3DE":"#FCEBEB")+';color:'+(pass?"#27500A":"#A32D2D")+'">'+(pass?"합격":"불합격")+'</span>'
+      : '<span style="font-size:11px;color:#ccc">—</span>';
+    var cells = [1,2,3,4,5].map(function(s){
+      return '<td id="cell-'+inst.id+'-'+s+'">'+scoreCell(inst.id, s, inst.scores[s])+'</td>';
+    }).join("");
+    return '<tr>'
+      +'<td style="font-weight:700;color:'+rankColor+'">'+(total!==null?"#"+rankIdx:"—")+'</td>'
+      +'<td><div style="display:flex;align-items:center;gap:9px">'
+        +'<div class="avatar">'+inst.initials+'</div>'
+        +'<div><div style="font-size:13px;font-weight:600;color:#1A2E4A">'+inst.name+'</div>'
+        +'<div style="font-size:10px;color:#bbb">'+(inst.submittedAt||"미제출")+'</div></div>'
+      +'</div></td>'
+      +'<td style="color:#777">'+inst.subject+'</td>'
+      +'<td>'+statusBadge(inst)+'</td>'
+      +cells
+      +'<td style="font-size:14px;font-weight:700;color:'+totalColor+'">'+(total!==null?total+"pts":"—")+'</td>'
+      +'<td>'+gradeBadge(inst.grade)+'</td>'
+      +'<td>'+passBadge+'</td>'
+      +'<td><button class="ai-btn" style="background:#F8F9FB;border:1px solid #EBEBEB;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:#555" data-id="'+inst.id+'">AI 요약 →</button></td>'
+      +'</tr>';
+  }).join("");
+  document.getElementById("grade-tbody").innerHTML = html;
+  bindScoreCells("grade-tbody");
+}
+
+// ── 평가지 탭 렌더
+function renderEvalTabs() {
+  document.getElementById("eval-sheet-tabs").innerHTML = [1,2,3,4,5].map(function(n) {
+    return '<button class="tab-btn'+(activeEvalTab===n?" active":"")+'" data-eval="'+n+'">평가지 '+n+' <span style="font-size:10px;opacity:.6">20점</span></button>';
+  }).join("");
+}
+
+function renderEvalTable() {
+  document.getElementById("eval-sheet-title").textContent = "평가지 "+activeEvalTab+" — "+SHEET_LABELS[activeEvalTab];
+  document.getElementById("eval-score-head").textContent = "평가지"+activeEvalTab+" 점수";
+  var ranked = getRanked();
+  var html = ranked.map(function(inst, idx) {
+    var sv = inst.scores[activeEvalTab];
+    var submitted = sv !== null && sv !== undefined && sv !== "";
+    var rankColor = idx < 3 && submitted ? "#BA7517" : "#ccc";
+    var scoreColor = submitted ? (Number(sv)>=16?"#27500A":Number(sv)>=12?"#633806":"#A32D2D") : "#ccc";
+    return '<tr>'
+      +'<td style="font-weight:700;color:'+rankColor+'">'+(submitted?"#"+(idx+1):"—")+'</td>'
+      +'<td><div style="display:flex;align-items:center;gap:9px">'
+        +'<div class="avatar">'+inst.initials+'</div>'
+        +'<span style="font-size:13px;font-weight:600;color:#1A2E4A">'+inst.name+'</span>'
+      +'</div></td>'
+      +'<td style="color:#777">'+inst.subject+'</td>'
+      +'<td id="eval-cell-'+inst.id+'">'
+        +'<span class="eval-score-span" style="font-size:17px;font-weight:700;color:'+scoreColor+';cursor:pointer" data-id="'+inst.id+'">'
+          +(submitted?sv+"pts":"—")
+        +'</span></td>'
+      +'<td>'+(submitted?'<span class="badge" style="background:#EAF3DE;color:#27500A">제출완료</span>':'<span class="badge" style="background:#FCEBEB;color:#A32D2D">미제출</span>')+'</td>'
+      +'<td style="font-size:12px;color:#bbb">'+(inst.submittedAt||"—")+'</td>'
+      +'<td style="font-size:14px;font-weight:700;color:'+(inst.total!==null?"#185FA5":"#ccc")+'">'+(inst.total!==null?inst.total+"pts":"—")+'</td>'
+      +'<td>'+gradeBadge(inst.grade)+'</td>'
+      +'</tr>';
+  }).join("");
+  document.getElementById("eval-tbody").innerHTML = html;
+  bindEvalCells();
+}
+
+// ── 인라인 편집 바인딩 (이벤트 위임 방식)
+// 테이블 전체에 이벤트 하나만 달고, 클릭된 요소의 dataset으로 식별
+function bindScoreCells(tbodyId) {
+  var tbody = document.getElementById(tbodyId);
+  tbody.addEventListener("click", function(e) {
+    var span = e.target.closest(".score-cell");
+    if (!span) {
+      var aiBtn = e.target.closest(".ai-btn");
+      if (aiBtn) openAI(Number(aiBtn.dataset.id));
+      return;
+    }
+    var id = Number(span.dataset.id);
+    var sheet = Number(span.dataset.sheet);
+    var inst = instructors.find(function(i){return i.id===id;});
+    var cell = document.getElementById("cell-"+id+"-"+sheet);
+    cell.innerHTML = '<input class="score-input" type="number" min="0" max="20" value="'+(inst.scores[sheet]||"")+'">';
+    var inp = cell.querySelector("input");
+    inp.focus();
+    inp.addEventListener("blur", function(){saveScore(id,sheet,inp.value);});
+    inp.addEventListener("keydown", function(ev){
+      if(ev.key==="Enter") saveScore(id,sheet,inp.value);
+      if(ev.key==="Escape") renderGradeTable();
+    });
+  });
+}
+
+function bindEvalCells() {
+  var tbody = document.getElementById("eval-tbody");
+  tbody.addEventListener("click", function(e) {
+    var span = e.target.closest(".eval-score-span");
+    if (!span) return;
+    var id = Number(span.dataset.id);
+    var inst = instructors.find(function(i){return i.id===id;});
+    var cell = document.getElementById("eval-cell-"+id);
+    cell.innerHTML = '<input class="score-input" style="width:56px;height:30px" type="number" min="0" max="20" value="'+(inst.scores[activeEvalTab]||"")+'">';
+    var inp = cell.querySelector("input");
+    inp.focus();
+    inp.addEventListener("blur", function(){saveScoreEval(id,inp.value);});
+    inp.addEventListener("keydown", function(ev){
+      if(ev.key==="Enter") saveScoreEval(id,inp.value);
+      if(ev.key==="Escape") renderEvalTable();
+    });
+  });
+}
+
+function saveScore(id, sheet, val) {
+  var num = val===""?null:Math.min(20,Math.max(0,Math.round(Number(val))));
+  instructors = instructors.map(function(i){
+    if(i.id!==id) return i;
+    var ns = Object.assign({},i.scores); ns[sheet]=num;
+    return Object.assign({},i,{scores:ns});
+  });
+  refreshAll();
+}
+
+function saveScoreEval(id, val) {
+  var num = val===""?null:Math.min(20,Math.max(0,Math.round(Number(val))));
+  instructors = instructors.map(function(i){
+    if(i.id!==id) return i;
+    var ns = Object.assign({},i.scores); ns[activeEvalTab]=num;
+    return Object.assign({},i,{scores:ns});
+  });
+  refreshAll();
+}
+
+// ── 통계 렌더
+function renderStats() {
+  var ranked = getRanked();
+  var total = instructors.length;
+  var pass = ranked.filter(function(i){return i.total!==null&&i.total>=PASS_SCORE;}).length;
+  var fail = ranked.filter(function(i){return i.total!==null&&i.total<PASS_SCORE;}).length;
+  var none = ranked.filter(function(i){return i.total===null;}).length;
+  document.getElementById("stat-pass").textContent = pass+"명";
+  document.getElementById("stat-fail").textContent = fail+"명";
+  document.getElementById("stat-none").textContent = none+"명";
+  var pct = total>0?Math.round(pass/total*100):0;
+  document.getElementById("pass-rate-label").textContent = pct+"%";
+  document.getElementById("pass-rate-bar").style.width = pct+"%";
+
+  // 도넛 차트: Canvas arc()로 각 등급 부채꼴 그리기
+  var dc = document.getElementById("donut-canvas");
+  var dctx = dc.getContext("2d");
+  dctx.clearRect(0,0,110,110);
+  var grades = ["S","A","B","C","D"];
+  var counts = grades.map(function(g){return ranked.filter(function(i){return i.grade===g;}).length;});
+  var totalGraded = counts.reduce(function(a,b){return a+b;},0)||1;
+  var startAngle = -Math.PI/2; // 12시 방향 시작
+  var cx=55,cy=55,r=38;
+  dctx.beginPath();dctx.arc(cx,cy,r,0,2*Math.PI);
+  dctx.strokeStyle="#F0F0F0";dctx.lineWidth=16;dctx.stroke();
+  grades.forEach(function(g,i){
+    if(counts[i]===0) return;
+    var slice = counts[i]/totalGraded*2*Math.PI; // 비율을 각도(라디안)로 변환
+    dctx.beginPath();dctx.arc(cx,cy,r,startAngle,startAngle+slice);
+    dctx.strokeStyle=GRADE_CONFIG[g].color;dctx.lineWidth=16;dctx.stroke();
+    startAngle+=slice;
+  });
+  dctx.fillStyle="#1A2E4A";dctx.font="bold 13px sans-serif";
+  dctx.textAlign="center";dctx.textBaseline="middle";
+  dctx.fillText(totalGraded+"명",cx,cy);
+
+  document.getElementById("donut-legend").innerHTML = grades.map(function(g,i){
+    var gc=GRADE_CONFIG[g];
+    return '<div style="display:flex;align-items:center;gap:8px">'
+      +'<div style="width:10px;height:10px;border-radius:2px;background:'+gc.color+';flex-shrink:0"></div>'
+      +'<span style="font-size:13px;color:#444;flex:1">'+g+'등급</span>'
+      +'<span style="font-size:13px;font-weight:700;color:'+gc.color+'">'+counts[i]+'명</span>'
+      +'<span style="font-size:11px;color:#bbb">('+Math.round(counts[i]/total*100)+'%)</span>'
+      +'</div>';
+  }).join("");
+
+  // 바 차트: fillRect()으로 막대 그리기
+  var bc = document.getElementById("bar-canvas");
+  bc.width = bc.parentElement.offsetWidth - 4;
+  var bctx = bc.getContext("2d");
+  bctx.clearRect(0,0,bc.width,160);
+  var W=bc.width,H=160,PL=34,PB=28,PR=10;
+  var chartH=H-PB, chartW=W-PL-PR;
+  var barW=Math.min(52,chartW/5*0.45);
+  var totalGap=chartW-barW*5;
+  var gap=totalGap/6;
+  var maxV=20;
+  [0,5,10,15,20].forEach(function(v){
+    var y=chartH-(v/maxV)*chartH;
+    bctx.beginPath();bctx.moveTo(PL,y);bctx.lineTo(W-PR,y);
+    bctx.strokeStyle="#F0F0F0";bctx.lineWidth=1;bctx.stroke();
+    bctx.fillStyle="#bbb";bctx.font="9px sans-serif";bctx.textAlign="right";
+    bctx.fillText(v,PL-4,y+4);
+  });
+  [1,2,3,4,5].forEach(function(n,i){
+    var sub=instructors.filter(function(inst){var v=inst.scores[n];return v!==null&&v!==undefined&&v!==""});
+    var avg=sub.length>0?sub.reduce(function(a,inst){return a+Number(inst.scores[n]);},0)/sub.length:0;
+    var x=PL+gap*(i+1)+barW*i;
+    var bh=(avg/maxV)*chartH;
+    var y=chartH-bh;
+    bctx.fillStyle="#185FA5";bctx.globalAlpha=0.85;
+    bctx.fillRect(x,y,barW,bh);
+    bctx.globalAlpha=1;
+    bctx.fillStyle="#555";bctx.font="bold 10px sans-serif";bctx.textAlign="center";
+    bctx.fillText(avg.toFixed(1),x+barW/2,y-5);
+    bctx.fillStyle="#aaa";bctx.font="9px sans-serif";
+    bctx.fillText(SHEET_LABELS[n],x+barW/2,H-6);
+  });
+
+  // 라인 차트: moveTo + lineTo 반복
+  var lc = document.getElementById("line-canvas");
+  lc.width = lc.parentElement.offsetWidth - 4;
+  var lctx=lc.getContext("2d");
+  lctx.clearRect(0,0,lc.width,140);
+  var LW=lc.width,LH=140,LPL=38,LPB=22,LPR=16;
+  var lChartH=LH-LPB, lChartW=LW-LPL-LPR;
+  var curPass=total>0?Math.round(pass/total*100):0;
+  var allData=QUARTERLY_DATA.concat([{q:"현재",passRate:curPass}]);
+  var minV=40,maxV2=100;
+  [40,60,80,100].forEach(function(v){
+    var y=lChartH-((v-minV)/(maxV2-minV))*lChartH;
+    lctx.beginPath();lctx.moveTo(LPL,y);lctx.lineTo(LW-LPR,y);
+    lctx.strokeStyle="#F0F0F0";lctx.lineWidth=1;lctx.stroke();
+    lctx.fillStyle="#bbb";lctx.font="9px sans-serif";lctx.textAlign="right";
+    lctx.fillText(v+"%",LPL-4,y+4);
+  });
+  lctx.beginPath();lctx.strokeStyle="#185FA5";lctx.lineWidth=2.5;lctx.lineJoin="round";lctx.lineCap="round";
+  allData.forEach(function(d,i){
+    var x=LPL+(i/(allData.length-1))*lChartW;
+    var y=lChartH-((d.passRate-minV)/(maxV2-minV))*lChartH;
+    if(i===0) lctx.moveTo(x,y); else lctx.lineTo(x,y);
+  });
+  lctx.stroke();
+  allData.forEach(function(d,i){
+    var x=LPL+(i/(allData.length-1))*lChartW;
+    var y=lChartH-((d.passRate-minV)/(maxV2-minV))*lChartH;
+    lctx.beginPath();lctx.arc(x,y,5,0,2*Math.PI);
+    lctx.fillStyle="#fff";lctx.fill();lctx.strokeStyle="#185FA5";lctx.lineWidth=2;lctx.stroke();
+    lctx.fillStyle="#185FA5";lctx.font="bold 9px sans-serif";lctx.textAlign="center";
+    lctx.fillText(d.passRate+"%",x,y-9);
+    lctx.fillStyle="#aaa";lctx.font="9px sans-serif";lctx.fillText(d.q,x,LH-4);
+  });
+}
+
+// ── M1~M6 모듈 DB
+// 각 모듈: id, name, 트랙, 색상, 설명, 토픽, 시간, 대상 등급
+var MODULES = {
+  M1:{id:"M1",name:"서비스 전체 흐름 이해",track:"전 등급 필수",
+    color:"#5F5E5A",bg:"#F1EFE8",tc:"#2C2C2A",
+    desc:"입회→수업→컨설팅→재등록 전체 사이클에서 강사 역할 이해. '왜 하는지 모르고 처리' 문제 해소의 시작점.",
+    topics:["서비스 사이클 맵","부서 연계 구조","학생 여정 이해","KPI 연결 관계"],hours:"8h"},
+  M2:{id:"M2",name:"1:1 밀착관리 실전 기술",track:"핵심 모듈",
+    color:"#1D9E75",bg:"#E1F5EE",tc:"#085041",
+    desc:"불만 신호 감지, 첫 수업 체크리스트, D+3/7/14 대응 스크립트. 강의 기술과 별개의 밀착관리 노하우.",
+    topics:["불만 신호 감지법","첫 수업 체크리스트","학생·학부모 소통","D+3 대응 스크립트"],hours:"16h"},
+  M3:{id:"M3",name:"수업 SOP 및 품질 표준",track:"표준화",
+    color:"#185FA5",bg:"#E6F1FB",tc:"#0C447C",
+    desc:"수업 표준운영절차(SOP) 숙지 및 모의수업 평가 통과. 신입 강사 배정 제한 해제의 필수 관문.",
+    topics:["수업 SOP 매뉴얼","모의수업 실습","평가 루브릭","피드백 세션"],hours:"12h"},
+  M4:{id:"M4",name:"학생 성적 향상 전략",track:"성과 중심",
+    color:"#BA7517",bg:"#FAEEDA",tc:"#633806",
+    desc:"수능 목표 역산 설계, 취약점 진단, 단계별 처방 설계. 재등록률·이탈률 KPI와 직결.",
+    topics:["목표 역산 플래닝","취약점 진단 도구","단계별 처방 설계","성적 리포트 작성"],hours:"12h"},
+  M5:{id:"M5",name:"부서 협업 & 케이스 카드",track:"협업",
+    color:"#534AB7",bg:"#EEEDFE",tc:"#26215C",
+    desc:"학생 통합 케이스 카드 작성, Cross-team 미팅, 불만 에스컬레이션 프로세스 실습.",
+    topics:["케이스 카드 작성","에스컬레이션 기준","Cross-team 협업","이상한 점 리포트"],hours:"8h"},
+  M6:{id:"M6",name:"노하우 매뉴얼화 & 멘토링",track:"마스터 전용",
+    color:"#3B6D11",bg:"#EAF3DE",tc:"#27500A",
+    desc:"마스터 강사가 자신의 노하우를 조직 자산으로 전환. 신입 버디 배정, 내부 커뮤니티 운영 포함.",
+    topics:["노하우 문서화","버디 멘토링 기법","강의 시연 코칭","내부 사례 발표"],hours:"10h"},
+};
+
+// 등급 → 기본 모듈 우선순위 매핑
+var TRACK_MAP = {
+  "신입":   ["M1","M3","M2","M5"],
+  "준전임": ["M2","M4","M5","M1"],
+  "전임":   ["M4","M5","M1","M2"],
+  "마스터": ["M6","M4","M5","M1"],
+};
+
+// 취약 평가지 번호 → 연결 모듈 (점수가 가장 낮은 항목 기반)
+var WEAK_MODULE_MAP = {1:"M2", 2:"M3", 3:"M3", 4:"M4", 5:"M2"};
+
+// 개선 목표 → 추가 강조 모듈
+var GOAL_MODULE_MAP = {
+  "이탈률 감소": "M2",
+  "성적 향상":   "M4",
+  "협업 강화":   "M5",
+  "전반 역량":   "M1",
+};
+
+// 코스웨어 탭 상태
+var cfSelectedId   = null;  // 선택된 강사 id
+var cfSelectedGrade = null; // 선택된 등급
+var cfSelectedGoal  = null; // 선택된 목표
+
+// ── 코스웨어 필터 탭 렌더
+function renderCourseFilterTabs() {
+  var ranked = getRanked();
+  var html = '<button class="tab-btn'+(cfSelectedId===null?" active":"")+'" id="course-all-btn">전체 강사</button>';
+  ranked.forEach(function(i){
+    html += '<button class="tab-btn'+(cfSelectedId===i.id?" active":"")+'" data-cid="'+i.id+'">'+i.name+'</button>';
+  });
+  document.getElementById("course-filter-tabs").innerHTML = html;
+
+  document.getElementById("course-all-btn").addEventListener("click", function(){
+    cfSelectedId = null; cfSelectedGrade = null;
+    renderCourseFilterTabs(); resetCourseForm();
+  });
+  document.querySelectorAll("[data-cid]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      cfSelectedId = Number(btn.dataset.cid);
+      renderCourseFilterTabs(); loadCourseFormForInstructor(cfSelectedId);
+    });
+  });
+}
+
+// 강사 선택 시 폼 자동 채움
+function loadCourseFormForInstructor(id) {
+  var ranked = getRanked();
+  var inst = ranked.find(function(i){return i.id===id;});
+  if (!inst) return;
+
+  // 강사 정보 표시
+  document.getElementById("cf-info").style.display = "block";
+  document.getElementById("cf-avatar").textContent = inst.initials;
+  document.getElementById("cf-iname").textContent = inst.name+" 강사";
+  var weakSheet = getWeakSheet(inst.scores);
+  document.getElementById("cf-imeta").textContent =
+    inst.subject+" · "+(inst.total !== null ? inst.total+"pts" : "미제출")
+    +(weakSheet ? " · 취약: "+SHEET_LABELS[weakSheet] : "");
+
+  // 평가지 점수 그리드
+  var scoreHtml = [1,2,3,4,5].map(function(n){
+    var v = inst.scores[n];
+    var isWeak = n === weakSheet;
+    var bg = isWeak ? "#FCEBEB" : (v !== null && v !== "" ? "#EAF3DE" : "#F4F4F4");
+    var tc = isWeak ? "#A32D2D" : (v !== null && v !== "" ? "#27500A" : "#bbb");
+    return '<div style="text-align:center;background:'+bg+';border-radius:6px;padding:6px 3px">'
+      +'<div style="font-size:9px;color:'+tc+';margin-bottom:2px">P'+n+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:'+tc+'">'+(v!==null&&v!==''?v:"—")+'</div>'
+      +'</div>';
+  }).join("");
+  document.getElementById("cf-score-grid").innerHTML = scoreHtml;
+
+  // 등급 자동 선택: 평가 등급 → 트랙 매핑
+  var gradeToTrack = {S:"마스터",A:"전임",B:"준전임",C:"신입",D:"신입"};
+  var autoTrack = inst.grade ? gradeToTrack[inst.grade] : null;
+  if (autoTrack) selectGrade(autoTrack);
+
+  // 결과 초기화
+  document.getElementById("cf-empty").style.display = "block";
+  document.getElementById("cf-loading").style.display = "none";
+  document.getElementById("cf-result").style.display = "none";
+}
+
+function resetCourseForm() {
+  document.getElementById("cf-info").style.display = "none";
+  document.getElementById("cf-score-grid").innerHTML = "";
+  cfSelectedGrade = null; cfSelectedGoal = null;
+  document.querySelectorAll(".cf-gb").forEach(function(b){b.classList.remove("selected");});
+  document.querySelectorAll(".cf-goal").forEach(function(b){b.classList.remove("selected");});
+  document.getElementById("cf-memo").value = "";
+  document.getElementById("cf-empty").style.display = "block";
+  document.getElementById("cf-loading").style.display = "none";
+  document.getElementById("cf-result").style.display = "none";
+}
+
+function selectGrade(grade) {
+  cfSelectedGrade = grade;
+  document.querySelectorAll(".cf-gb").forEach(function(b){
+    b.classList.toggle("selected", b.dataset.grade === grade);
+  });
+}
+
+// ── AI 추천 실행 (Anthropic API 호출)
+// fetch로 /v1/messages에 POST → 강사 데이터 + 등급 + 목표를 프롬프트에 담음
+// 응답에서 JSON 파싱 → 모듈 순위 + 추천 이유 추출
+function runAIRecommendation() {
+  if (!cfSelectedId) { alert("강사를 선택해주세요."); return; }
+  if (!cfSelectedGrade) { alert("등급 트랙을 선택해주세요."); return; }
+  if (!cfSelectedGoal) { alert("개선 목표를 선택해주세요."); return; }
+
+  var ranked = getRanked();
+  var inst = ranked.find(function(i){return i.id===cfSelectedId;});
+  var weakSheet = getWeakSheet(inst.scores);
+  var memo = document.getElementById("cf-memo").value.trim();
+
+  // 로딩 표시
+  document.getElementById("cf-empty").style.display = "none";
+  document.getElementById("cf-loading").style.display = "block";
+  document.getElementById("cf-result").style.display = "none";
+
+  // AI에 넘길 강사 컨텍스트 구성
+  var scoreDesc = [1,2,3,4,5].map(function(n){
+    var v = inst.scores[n];
+    return "평가지"+n+"("+SHEET_LABELS[n]+"): "+(v!==null&&v!==""?v+"점":"미제출");
+  }).join(", ");
+
+  var prompt = "당신은 이지수능교육의 강사 역량개발 담당자입니다.\n"
+    + "다음 강사의 데이터를 보고 M1~M6 교육 모듈 중 가장 필요한 순서로 추천해 주세요.\n\n"
+    + "## 강사 정보\n"
+    + "- 이름: "+inst.name+" ("+inst.subject+")\n"
+    + "- 현재 등급: "+(inst.grade||"미정")+" ("+( inst.total!==null?inst.total+"점":"미제출")+")\n"
+    + "- 배정된 트랙: "+cfSelectedGrade+" 강사\n"
+    + "- 이번 분기 목표: "+cfSelectedGoal+"\n"
+    + "- 평가 점수: "+scoreDesc+"\n"
+    + (weakSheet?"- 가장 취약한 항목: 평가지"+weakSheet+" "+SHEET_LABELS[weakSheet]+"\n":"")
+    + (memo?"- 관리자 메모: "+memo+"\n":"")
+    + "\n## 모듈 목록\n"
+    + "M1: 서비스 전체 흐름 이해 (전 등급 필수)\n"
+    + "M2: 1:1 밀착관리 실전 기술 (입회 이탈 방어 핵심)\n"
+    + "M3: 수업 SOP 및 품질 표준 (신입 현장투입 관문)\n"
+    + "M4: 학생 성적 향상 전략 (재등록률 KPI 직결)\n"
+    + "M5: 부서 협업 & 케이스 카드 (정보단절 해소)\n"
+    + "M6: 노하우 매뉴얼화 & 멘토링 (마스터 전용)\n\n"
+    + "## 응답 형식 (반드시 아래 JSON만 출력, 다른 설명 없이)\n"
+    + '{"modules":["M?","M?","M?","M?"],'
+    + '"reason":"이 강사에게 이 순서로 추천하는 이유를 2~3문장으로",'
+    + '"urgent":"가장 시급한 모듈 id (M1~M6 중 하나)",'
+    + '"goal_module":"개선 목표와 가장 연결된 모듈 id",'
+    + '"summary":"강사 현황 한 줄 요약"}';
+
+  fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{role:"user", content: prompt}]
+    })
+  })
+  .then(function(res){ return res.json(); })
+  .then(function(data){
+    var raw = data.content && data.content[0] ? data.content[0].text : "";
+    // JSON 파싱: ```json 펜스 제거 후 파싱
+    var clean = raw.replace(/```json|```/g,"").trim();
+    var parsed;
+    try { parsed = JSON.parse(clean); } catch(e) {
+      // 파싱 실패 시 룰 기반 폴백
+      parsed = fallbackRecommend(inst, cfSelectedGrade, cfSelectedGoal, weakSheet);
+    }
+    document.getElementById("cf-loading").style.display = "none";
+    renderCourseResult(inst, parsed, cfSelectedGrade, cfSelectedGoal, weakSheet);
+  })
+  .catch(function(){
+    // API 오류 시 룰 기반 폴백으로 즉시 추천
+    var parsed = fallbackRecommend(inst, cfSelectedGrade, cfSelectedGoal, weakSheet);
+    document.getElementById("cf-loading").style.display = "none";
+    renderCourseResult(inst, parsed, cfSelectedGrade, cfSelectedGoal, weakSheet);
+  });
+}
+
+// API 실패 시 룰 기반 폴백 추천 함수
+// 등급 트랙 기본 순서 + 취약 모듈 + 목표 모듈을 Set으로 중복 제거
+function fallbackRecommend(inst, grade, goal, weakSheet) {
+  var base = (TRACK_MAP[grade] || ["M1","M2","M3"]).slice();
+  var weakMod = weakSheet ? WEAK_MODULE_MAP[weakSheet] : null;
+  var goalMod = GOAL_MODULE_MAP[goal] || null;
+  // 취약·목표 모듈을 앞으로 이동
+  [weakMod, goalMod].forEach(function(m){
+    if (m && base.indexOf(m) === -1) base.unshift(m);
+    else if (m) { base.splice(base.indexOf(m),1); base.unshift(m); }
+  });
+  var seen = {}; var modules = [];
+  base.forEach(function(m){ if(!seen[m]){seen[m]=1;modules.push(m);} });
+  return {
+    modules: modules.slice(0,4),
+    urgent: modules[0],
+    goal_module: goalMod || modules[0],
+    reason: grade+" 강사 트랙 기준 필수 모듈과 "
+      +(weakSheet?"취약 항목("+SHEET_LABELS[weakSheet]+") 보완 모듈":"균형 역량 강화 모듈")
+      +"을 우선 배치하였습니다. 목표("+goal+")와 연결된 모듈을 최우선으로 권장합니다.",
+    summary: inst.name+" 강사 | "+grade+" 트랙 | 합계 "+(inst.total!==null?inst.total+"pts":"미제출"),
+  };
+}
+
+// 추천 결과 렌더링
+function renderCourseResult(inst, parsed, grade, goal, weakSheet) {
+  var modules = (parsed.modules || []).slice(0,4);
+  var g = inst.grade ? GRADE_CONFIG[inst.grade] : null;
+
+  // 강사 헤더
+  var header = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #F4F4F4">'
+    +'<div class="avatar" style="width:42px;height:42px;font-size:13px">'+inst.initials+'</div>'
+    +'<div style="flex:1">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+        +'<span style="font-size:15px;font-weight:700;color:#1A2E4A">'+inst.name+'</span>'
+        +'<span style="font-size:12px;color:#aaa">'+inst.subject+'</span>'
+        +(g?'<span class="badge" style="background:'+g.bg+';color:'+g.text+'">'+inst.grade+'등급</span>':"")
+        +'<span class="badge" style="background:#E6F1FB;color:#0C447C">'+grade+' 트랙</span>'
+        +'<span class="badge" style="background:#EEEDFE;color:#26215C">목표: '+goal+'</span>'
+      +'</div>'
+      +'<div style="font-size:12px;color:#aaa;margin-top:3px">'
+        +(parsed.summary||"")
+      +'</div>'
+    +'</div>'
+    +'</div>';
+
+  // AI 추천 이유
+  var reasonBox = '<div style="background:#F0F7FF;border-left:3px solid #185FA5;border-radius:0 8px 8px 0;padding:12px 14px;margin-bottom:16px">'
+    +'<div style="font-size:11px;font-weight:700;color:#185FA5;margin-bottom:5px;letter-spacing:.04em">AI 추천 근거</div>'
+    +'<div style="font-size:13px;color:#1A2E4A;line-height:1.7">'+(parsed.reason||"")+'</div>'
+    +'</div>';
+
+  // 모듈 카드 목록
+  // 1위 카드는 크게, 2~4위는 작게 표시
+  var moduleCards = '';
+  modules.forEach(function(mid, idx) {
+    var m = MODULES[mid];
+    if (!m) return;
+    var isUrgent = mid === parsed.urgent;
+    var isGoal   = mid === parsed.goal_module;
+    var rank = idx + 1;
+
+    if (idx === 0) {
+      // 1순위: 대형 카드
+      moduleCards += '<div style="border:2px solid '+m.color+';border-radius:12px;padding:18px 20px;margin-bottom:10px;background:'+m.bg+'">'
+        +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+          +'<div style="width:32px;height:32px;border-radius:50%;background:'+m.color+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0">1</div>'
+          +'<div style="flex:1">'
+            +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+              +'<span style="font-size:15px;font-weight:700;color:'+m.tc+'">'+m.id+' '+m.name+'</span>'
+              +(isUrgent?'<span class="badge" style="background:'+m.color+';color:#fff;font-size:10px">최우선</span>':"")
+              +(isGoal?'<span class="badge" style="background:#EEEDFE;color:#26215C;font-size:10px">목표연결</span>':"")
+            +'</div>'
+            +'<div style="font-size:11px;color:'+m.tc+';opacity:.7;margin-top:2px">'+m.track+' · '+m.hours+'</div>'
+          +'</div>'
+        +'</div>'
+        +'<div style="font-size:13px;color:'+m.tc+';line-height:1.7;margin-bottom:10px">'+m.desc+'</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:5px">'
+          +m.topics.map(function(t){
+            return '<span style="background:rgba(255,255,255,.6);border:1px solid '+m.color+'40;border-radius:4px;padding:2px 8px;font-size:11px;color:'+m.tc+'">'+t+'</span>';
+          }).join("")
+        +'</div>'
+        +'</div>';
+    } else {
+      // 2~4순위: 소형 카드
+      moduleCards += '<div style="border:1px solid #EBEBEB;border-left:4px solid '+m.color+';border-radius:0 10px 10px 0;padding:13px 16px;margin-bottom:8px;background:#fff;display:flex;gap:12px;align-items:flex-start">'
+        +'<div style="width:24px;height:24px;border-radius:50%;background:'+m.bg+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:'+m.tc+';flex-shrink:0;margin-top:1px">'+rank+'</div>'
+        +'<div style="flex:1">'
+          +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;flex-wrap:wrap">'
+            +'<span style="font-size:13px;font-weight:700;color:#1A2E4A">'+m.id+' '+m.name+'</span>'
+            +(isGoal?'<span class="badge" style="background:#EEEDFE;color:#26215C;font-size:10px">목표연결</span>':"")
+            +'<span style="font-size:11px;color:#aaa">'+m.hours+'</span>'
+          +'</div>'
+          +'<div style="font-size:12px;color:#666;line-height:1.5">'+m.desc+'</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px">'
+            +m.topics.map(function(t){
+              return '<span style="background:#F4F6F9;border-radius:4px;padding:2px 7px;font-size:10px;color:#888">'+t+'</span>';
+            }).join("")
+          +'</div>'
+        +'</div>'
+        +'</div>';
+    }
+  });
+
+  // 비추천 모듈 (선택되지 않은 나머지)
+  var skipped = Object.keys(MODULES).filter(function(mid){ return modules.indexOf(mid)===-1; });
+  var skippedHtml = skipped.length > 0
+    ? '<div style="margin-top:14px;padding-top:12px;border-top:1px dashed #EBEBEB">'
+      +'<div style="font-size:11px;color:#bbb;margin-bottom:7px;font-weight:700">이번 분기 보류 모듈</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px">'
+        +skipped.map(function(mid){
+          var m=MODULES[mid];
+          return '<div style="background:#F8F9FB;border:1px solid #EBEBEB;border-radius:7px;padding:5px 12px;font-size:12px;color:#aaa">'+m.id+' '+m.name+'</div>';
+        }).join("")
+      +'</div></div>'
+    : '';
+
+  var fullHtml = '<div class="card">'
+    + header + reasonBox
+    + '<div style="font-size:11px;font-weight:700;color:#999;margin-bottom:10px;letter-spacing:.04em;text-transform:uppercase">추천 교육 모듈 (우선순위 순)</div>'
+    + moduleCards
+    + skippedHtml
+    + '</div>';
+
+  var resultEl = document.getElementById("cf-result");
+  resultEl.innerHTML = fullHtml;
+  resultEl.style.display = "block";
+}
+
+// ── AI 모달
+function openAI(id) {
+  var inst = instructors.find(function(i){return i.id===id;});
+  var ranked = getRanked();
+  var rInst = ranked.find(function(r){return r.id===id;});
+  document.getElementById("ai-avatar").textContent = inst.initials;
+  document.getElementById("ai-name").textContent = inst.name+" 강사";
+  document.getElementById("ai-sub").textContent = inst.subject+" · "+(rInst&&rInst.total!==null?rInst.total:"—")+"점";
+  document.getElementById("ai-scores").innerHTML = [1,2,3,4,5].map(function(n){
+    return '<div style="flex:1;text-align:center;background:#F8F9FB;border-radius:8px;padding:7px 4px">'
+      +'<div style="font-size:9px;color:#bbb">P'+n+'</div>'
+      +'<div style="font-size:14px;font-weight:700;color:#1A2E4A">'+(inst.scores[n]!==null&&inst.scores[n]!==undefined?inst.scores[n]:"—")+'</div>'
+      +'</div>';
+  }).join("");
+  document.getElementById("ai-text").textContent = "";
+  document.getElementById("ai-loading-txt").textContent = "생성 중...";
+  document.getElementById("ai-modal").classList.add("open");
+  var summary = AI_SUMMARIES[id] || "AI 요약 정보가 없습니다.";
+  var idx = 0;
+  if (aiTimer) clearInterval(aiTimer);
+  aiTimer = setInterval(function(){
+    document.getElementById("ai-text").textContent = summary.slice(0,idx);
+    idx += 3;
+    if (idx > summary.length) {
+      document.getElementById("ai-text").textContent = summary;
+      document.getElementById("ai-loading-txt").textContent = "";
+      clearInterval(aiTimer);
+    }
+  }, 18);
+}
+
+// ── 평가 입력 모달
+function openEvalForm() {
+  document.getElementById("ef-name").value = "";
+  document.getElementById("ef-sheet-inputs").innerHTML = [1,2,3,4,5].map(function(n){
+    return '<div style="margin-bottom:9px">'
+      +'<label style="font-size:11px;color:#999;display:block;margin-bottom:4px">평가지 '+n+' — '+SHEET_LABELS[n]+' (0~20)</label>'
+      +'<input id="ef-s'+n+'" type="number" min="0" max="20" style="width:100%;height:34px;border:1px solid #EBEBEB;border-radius:8px;padding:0 11px;font-size:13px">'
+      +'</div>';
+  }).join("");
+  document.getElementById("eval-modal").classList.add("open");
+}
+
+function submitEvalForm() {
+  var name = document.getElementById("ef-name").value.trim();
+  var match = instructors.find(function(i){return i.name===name;});
+  if (!match) { alert("등록되지 않은 강사명입니다."); return; }
+  var ns = {};
+  for (var k=1;k<=5;k++){
+    var v = document.getElementById("ef-s"+k).value;
+    ns[k] = v===""?null:Math.min(20,Math.max(0,Math.round(Number(v))));
+  }
+  var today = new Date().toISOString().slice(0,10);
+  instructors = instructors.map(function(i){
+    if(i.id!==match.id) return i;
+    return Object.assign({},i,{scores:ns,submittedAt:today});
+  });
+  document.getElementById("eval-modal").classList.remove("open");
+  refreshAll();
+}
+
+// ── 메뉴 전환
+function switchMenu(menu) {
+  activeMenu = menu;
+  document.querySelectorAll(".nav-btn").forEach(function(b){
+    b.classList.toggle("active", b.dataset.menu===menu);
+  });
+  document.querySelectorAll(".section").forEach(function(s){
+    s.classList.toggle("active", s.id==="sec-"+menu);
+  });
+  if (menu==="stats") setTimeout(renderStats, 30);
+  if (menu==="course") { renderCourseFilterTabs(); }
+  if (menu==="perf") { initPerfTab(); }
+}
+
+// ── 전체 리렌더
+function refreshAll() {
+  updateSummary();
+  if (activeMenu==="grade") renderGradeTable();
+  if (activeMenu==="eval") renderEvalTable();
+  if (activeMenu==="stats") setTimeout(renderStats, 30);
+  if (activeMenu==="course") { renderCourseFilterTabs(); }
+}
+
+// ── 이벤트 바인딩 (DOMContentLoaded 후 한 번만)
+document.addEventListener("DOMContentLoaded", function() {
+
+  // 네비게이션 버튼
+  document.getElementById("nav-btns").addEventListener("click", function(e){
+    var btn = e.target.closest(".nav-btn");
+    if (!btn) return;
+    switchMenu(btn.dataset.menu);
+  });
+
+  // 등급 탭
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-grade]");
+    if (!btn) return;
+    activeGradeTab = btn.dataset.grade;
+    renderGradeTabs();
+    renderGradeTable();
+  });
+
+  // 평가지 탭
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-eval]");
+    if (!btn) return;
+    activeEvalTab = Number(btn.dataset.eval);
+    renderEvalTabs();
+    renderEvalTable();
+  });
+
+  // 검색
+  document.getElementById("search-input").addEventListener("input", renderGradeTable);
+
+  // 평가 입력 버튼
+  document.getElementById("add-btn").addEventListener("click", openEvalForm);
+
+  // 모달 닫기
+  document.getElementById("ai-close").addEventListener("click", function(){
+    document.getElementById("ai-modal").classList.remove("open");
+    if(aiTimer) clearInterval(aiTimer);
+  });
+  document.getElementById("eval-close").addEventListener("click", function(){
+    document.getElementById("eval-modal").classList.remove("open");
+  });
+  document.getElementById("ef-submit").addEventListener("click", submitEvalForm);
+
+  // 모달 배경 클릭 닫기
+  document.querySelectorAll(".modal-bg").forEach(function(m){
+    m.addEventListener("click", function(e){
+      if(e.target===m) m.classList.remove("open");
+    });
+  });
+
+  // ── 코스웨어 폼 이벤트 바인딩
+  // 등급 버튼: 클릭된 버튼의 data-grade 값을 cfSelectedGrade에 저장
+  document.getElementById("cf-grade-btns").addEventListener("click", function(e){
+    var btn = e.target.closest(".cf-gb");
+    if (!btn) return;
+    selectGrade(btn.dataset.grade);
+  });
+
+  // 목표 버튼: 하나만 선택 (토글)
+  document.querySelectorAll(".cf-goal").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      cfSelectedGoal = btn.dataset.goal;
+      document.querySelectorAll(".cf-goal").forEach(function(b){b.classList.remove("selected");});
+      btn.classList.add("selected");
+    });
+  });
+
+  // AI 추천 실행 버튼
+  document.getElementById("cf-run").addEventListener("click", runAIRecommendation);
+
+  // 초기 렌더
+  updateSummary();
+  renderGradeTabs();
+  renderGradeTable();
+  renderEvalTabs();
+  renderEvalTable();
+});
+
+// ═══════════════════════════════════════
+// 성과관리 모듈
+// ═══════════════════════════════════════
+
+// ── Action Plan 템플릿
+// 등급·목표 모듈 → 12주 과제 자동 생성
+var AP_TEMPLATES = {
+  M2: [
+    {w:"1~2주",task:"D+3 대응 스크립트 숙지 및 롤플레이 실습",done:false},
+    {w:"3~4주",task:"첫 수업 체크리스트 현장 적용 후 자기평가 제출",done:false},
+    {w:"5~6주",task:"불만 신호 감지 사례 2건 케이스 카드 작성",done:false},
+    {w:"7~8주",task:"학부모 소통 시나리오 실습 (컨설팅팀 동행)",done:false},
+    {w:"9~10주",task:"밀착관리 중간 점검 — 담당 컨설턴트와 케이스 미팅",done:false},
+    {w:"11~12주",task:"90일 종합 자기평가 제출 + 다음 분기 목표 설정",done:false},
+  ],
+  M3: [
+    {w:"1~2주",task:"수업 SOP 매뉴얼 정독 및 핵심 20가지 체크리스트 작성",done:false},
+    {w:"3~4주",task:"모의수업 1차 시연 — 동료 강사 피드백",done:false},
+    {w:"5~6주",task:"SOP 미준수 항목 보완 후 2차 모의수업",done:false},
+    {w:"7~8주",task:"실제 수업 녹화 후 자기 모니터링 보고서 제출",done:false},
+    {w:"9~10주",task:"혁신TF 평가 루브릭 기준 최종 평가",done:false},
+    {w:"11~12주",task:"현장 투입 자격 심사 결과 반영",done:false},
+  ],
+  M4: [
+    {w:"1~2주",task:"수강생 3명 목표 등급 역산 플래닝 작성",done:false},
+    {w:"3~4주",task:"취약점 진단 도구 활용 — 개별 처방 설계",done:false},
+    {w:"5~6주",task:"중간 모의고사 전후 성적 비교 분석 제출",done:false},
+    {w:"7~8주",task:"성적 향상 사례 1건 내부 공유 발표",done:false},
+    {w:"9~10주",task:"재등록 의향 설문 결과 분석 및 개선안 제출",done:false},
+    {w:"11~12주",task:"분기 성적 향상률 KPI 달성 여부 검토",done:false},
+  ],
+  DEFAULT: [
+    {w:"1~2주",task:"배정 모듈 학습 계획 수립 및 운영팀 제출",done:false},
+    {w:"3~4주",task:"모듈 1~2차시 수강 완료 후 학습 노트 작성",done:false},
+    {w:"5~6주",task:"실습 과제 1건 제출",done:false},
+    {w:"7~8주",task:"중간 점검 — 담당 멘토와 1:1 피드백",done:false},
+    {w:"9~10주",task:"모듈 전 과정 수강 완료",done:false},
+    {w:"11~12주",task:"90일 종합 자기평가 및 다음 목표 설정",done:false},
+  ],
+};
+
+// 강사별 Action Plan 데이터 저장소 (key: instructor id)
+var actionPlans = {};
+
+function getAPTemplate(inst) {
+  // 취약 평가지 기반 핵심 모듈 → 해당 템플릿 선택
+  var weak = getWeakSheet(inst.scores);
+  var mod = weak ? WEAK_MODULE_MAP[weak] : null;
+  if (mod === "M2") return JSON.parse(JSON.stringify(AP_TEMPLATES.M2));
+  if (mod === "M3") return JSON.parse(JSON.stringify(AP_TEMPLATES.M3));
+  if (mod === "M4") return JSON.parse(JSON.stringify(AP_TEMPLATES.M4));
+  return JSON.parse(JSON.stringify(AP_TEMPLATES.DEFAULT));
+}
+
+function ensureAP(inst) {
+  if (!actionPlans[inst.id]) {
+    actionPlans[inst.id] = {
+      tasks: getAPTemplate(inst),
+      startDate: new Date().toISOString().slice(0,10),
+      instName: inst.name,
+    };
+  }
+  return actionPlans[inst.id];
+}
+
+function apProgress(id) {
+  if (!actionPlans[id]) return 0;
+  var t = actionPlans[id].tasks;
+  return Math.round(t.filter(function(x){return x.done;}).length / t.length * 100);
+}
+
+// 노하우 피드 데이터
+var knowhowFeed = [
+  {id:1,author:"이지호",grade:"S",subject:"국어",tag:"밀착관리",
+   content:"첫 수업 D+3에 전화할 때 '어떠셨어요?' 대신 '가장 인상 깊었던 부분이 뭐였어요?'로 시작하면 학생이 3배는 더 많이 말합니다. 불만도 자연스럽게 나옵니다.",
+   likes:12,date:"2026-03-15",saved:false},
+  {id:2,author:"김수현",grade:"A",subject:"수학",tag:"성적향상",
+   content:"수능 D-60부터는 새 개념 대신 기존 오답 패턴을 분석합니다. 오답 노트를 '왜 틀렸나'가 아닌 '어떤 상황에서 이 실수가 나오나'로 정리하게 하면 재발률이 확 줄어요.",
+   likes:9,date:"2026-03-12",saved:false},
+  {id:3,author:"이지호",grade:"S",subject:"국어",tag:"학부모소통",
+   content:"학부모 중간 리포트는 숫자(등급)보다 '이번 달 달라진 점 3가지'를 먼저 씁니다. 부모는 성적보다 변화를 원합니다. 리포트 발송 후 교체 요청이 거의 없어졌어요.",
+   likes:15,date:"2026-03-10",saved:false},
+  {id:4,author:"최예린",grade:"B",subject:"과학",tag:"수업설계",
+   content:"개념 설명 → 예제 → 변형 문제 순서보다, 변형 문제 먼저 틀리게 한 뒤 개념으로 돌아오는 역순 구조가 기억 유지율이 훨씬 높습니다. 처음엔 학생이 당황하지만 금방 익숙해져요.",
+   likes:7,date:"2026-03-08",saved:false},
+];
+
+// 분기 이력 데이터 (전분기 vs 현재)
+var prevQuarterScores = {
+  1:{1:15,2:14,3:16,4:13,5:15},
+  2:{1:18,2:17,3:18,4:16,5:17},
+  3:{1:12,2:11,3:13,4:10,5:12},
+  4:{1:14,2:13,3:15,4:14,5:13},
+  7:{1:10,2:9,3:11,4:9,5:9},
+};
+
+// ── 성과관리 탭 초기화
+function initPerfTab() {
+  updatePerfBanner();
+  renderPerfSub("action");
+  // 서브탭 이벤트
+  document.querySelectorAll(".perf-sub").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll(".perf-sub").forEach(function(b){
+        b.style.background="#fff"; b.style.color="#666"; b.style.borderColor="#EBEBEB";
+      });
+      btn.style.background="#1A2E4A"; btn.style.color="#fff"; btn.style.borderColor="#1A2E4A";
+      renderPerfSub(btn.dataset.sub);
+    });
+  });
+}
+
+function updatePerfBanner() {
+  var ranked = getRanked();
+  // Action Plan 40% 미만 강사
+  var lowAP = ranked.filter(function(i){return i.total!==null && apProgress(i.id)<40;}).length;
+  // 아직 AP 미생성 강사 (제출 완료했지만 플랜 없는 경우)
+  var noAP = ranked.filter(function(i){return i.total!==null && !actionPlans[i.id];}).length;
+  document.getElementById("perf-risk-count").textContent = noAP+"명";
+  document.getElementById("perf-low-ap").textContent = lowAP+"명";
+  var passCount = ranked.filter(function(i){return i.total!==null&&i.total>=PASS_SCORE;}).length;
+  var total = instructors.length;
+  document.getElementById("perf-churn-rate").textContent = total>0 ? Math.round((1-passCount/total)*100)+"%" : "—";
+}
+
+function renderPerfSub(sub) {
+  var el = document.getElementById("perf-sub-content");
+  if (sub==="action") el.innerHTML = renderActionPlan();
+  if (sub==="growth") el.innerHTML = renderGrowthCompare();
+  if (sub==="alert")  el.innerHTML = renderAlertCenter();
+  if (sub==="feed")   el.innerHTML = renderKnowhowFeed();
+  bindPerfEvents(sub);
+}
+
+// ── 1. 90일 Action Plan
+function renderActionPlan() {
+  var ranked = getRanked().filter(function(i){return i.total!==null;});
+  var html = '<div style="display:flex;flex-direction:column;gap:14px">';
+
+  ranked.forEach(function(inst) {
+    var ap = ensureAP(inst);
+    var pct = apProgress(inst.id);
+    var g = inst.grade ? GRADE_CONFIG[inst.grade] : null;
+    var barColor = pct>=80?"#3B6D11":pct>=40?"#185FA5":"#E24B4A";
+
+    html += '<div class="card" style="padding:18px 20px">'
+      // 헤더
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #F4F4F4">'
+        +'<div class="avatar" style="width:38px;height:38px;font-size:12px">'+inst.initials+'</div>'
+        +'<div style="flex:1">'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+            +'<span style="font-size:14px;font-weight:700;color:#1A2E4A">'+inst.name+'</span>'
+            +(g?'<span class="badge" style="background:'+g.bg+';color:'+g.text+'">'+inst.grade+'</span>':"")
+            +'<span style="font-size:12px;color:#aaa">시작일: '+ap.startDate+'</span>'
+          +'</div>'
+          +'<div style="margin-top:7px;display:flex;align-items:center;gap:8px">'
+            +'<div style="flex:1;height:6px;background:#F0F0F0;border-radius:99px;overflow:hidden">'
+              +'<div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:99px;transition:width .6s"></div>'
+            +'</div>'
+            +'<span style="font-size:12px;font-weight:700;color:'+barColor+'">'+pct+'%</span>'
+          +'</div>'
+        +'</div>'
+        +'<button class="ap-gen-btn" data-id="'+inst.id+'" style="background:#F8F9FB;border:1px solid #EBEBEB;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;color:#555;white-space:nowrap">AI 재생성</button>'
+      +'</div>'
+      // 주차별 체크리스트
+      +'<div style="display:flex;flex-direction:column;gap:6px">'
+      +ap.tasks.map(function(task,ti){
+        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:'+(task.done?"#EAF3DE":"#F8F9FB")+';border-radius:8px">'
+          +'<input type="checkbox" '+(task.done?"checked":"")
+            +' data-apid="'+inst.id+'" data-ti="'+ti+'"'
+            +' style="margin-top:2px;width:15px;height:15px;accent-color:#3B6D11;flex-shrink:0">'
+          +'<div>'
+            +'<div style="font-size:11px;color:'+(task.done?"#3B6D11":"#aaa")+';margin-bottom:2px;font-weight:700">'+task.w+'</div>'
+            +'<div style="font-size:13px;color:'+(task.done?"#27500A":"#333")+';text-decoration:'+(task.done?"line-through":"none")+';line-height:1.5">'+task.task+'</div>'
+          +'</div>'
+        +'</div>';
+      }).join("")
+      +'</div>'
+    +'</div>';
+  });
+
+  var noData = getRanked().filter(function(i){return i.total===null;}).length;
+  if (noData>0) {
+    html += '<div style="background:#F8F9FB;border:1px dashed #EBEBEB;border-radius:12px;padding:16px;text-align:center">'
+      +'<p style="font-size:13px;color:#bbb;margin:0">평가 미제출 강사 '+noData+'명 — 제출 후 Action Plan이 자동 생성됩니다</p>'
+    +'</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ── 2. 분기 성장 비교 (Canvas 레이더 차트)
+// Canvas arc()로 5각형 레이더 직접 그림
+function renderGrowthCompare() {
+  var ranked = getRanked().filter(function(i){return i.total!==null;});
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">';
+  ranked.forEach(function(inst){
+    var prev = prevQuarterScores[inst.id] || {1:0,2:0,3:0,4:0,5:0};
+    var curr = inst.scores;
+    var changes = [1,2,3,4,5].map(function(n){
+      var c=Number(curr[n]||0), p=Number(prev[n]||0);
+      return {n:n, curr:c, prev:p, delta:c-p, label:SHEET_LABELS[n]};
+    });
+    var totalDelta = changes.reduce(function(a,b){return a+b.delta;},0);
+    var g = inst.grade ? GRADE_CONFIG[inst.grade] : null;
+
+    html += '<div class="card">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+        +'<div class="avatar" style="width:34px;height:34px;font-size:11px">'+inst.initials+'</div>'
+        +'<div style="flex:1">'
+          +'<div style="display:flex;align-items:center;gap:7px">'
+            +'<span style="font-size:13px;font-weight:700;color:#1A2E4A">'+inst.name+'</span>'
+            +(g?'<span class="badge" style="background:'+g.bg+';color:'+g.text+'">'+inst.grade+'</span>':"")
+          +'</div>'
+          +'<span style="font-size:12px;font-weight:700;color:'+(totalDelta>0?"#27500A":totalDelta<0?"#A32D2D":"#888")+'">'
+            +(totalDelta>0?"▲ +":"▼ ")+totalDelta+'pts 전분기 대비'
+          +'</span>'
+        +'</div>'
+      +'</div>'
+      // 레이더 캔버스
+      +'<canvas id="radar-'+inst.id+'" width="280" height="200" style="display:block;margin:0 auto"></canvas>'
+      // 항목별 변화
+      +'<div style="display:flex;flex-direction:column;gap:4px;margin-top:10px">'
+      +changes.map(function(c){
+        var dc = c.delta>0?"#27500A":c.delta<0?"#A32D2D":"#888";
+        var bg = c.delta>0?"#EAF3DE":c.delta<0?"#FCEBEB":"#F4F4F4";
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:'+bg+';border-radius:6px">'
+          +'<span style="font-size:11px;color:'+dc+';flex:1">'+c.label+'</span>'
+          +'<span style="font-size:12px;font-weight:700;color:'+dc+'">'+(c.delta>0?"+":"")+c.delta+'</span>'
+          +'<span style="font-size:12px;color:#aaa">'+c.prev+'→'+c.curr+'</span>'
+        +'</div>';
+      }).join("")
+      +'</div>'
+    +'</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function drawRadars() {
+  var ranked = getRanked().filter(function(i){return i.total!==null;});
+  ranked.forEach(function(inst){
+    var canvas = document.getElementById("radar-"+inst.id);
+    if (!canvas) return;
+    var ctx = canvas.getContext("2d");
+    var W=280,H=200,cx=140,cy=100,R=70;
+    ctx.clearRect(0,0,W,H);
+    var n=5;
+    // 각도: 위에서 시작, 시계 방향
+    function pt(i,r){ var a=-Math.PI/2+(2*Math.PI*i/n); return [cx+r*Math.cos(a), cy+r*Math.sin(a)]; }
+    // 배경 격자
+    [20,40,60,80,100].forEach(function(pct){
+      var r=R*pct/100;
+      ctx.beginPath();
+      for(var i=0;i<n;i++){ var p=pt(i,r); i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]); }
+      ctx.closePath(); ctx.strokeStyle="#F0F0F0"; ctx.lineWidth=1; ctx.stroke();
+    });
+    // 축선
+    for(var i=0;i<n;i++){
+      var p=pt(i,R); ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(p[0],p[1]);
+      ctx.strokeStyle="#EBEBEB"; ctx.lineWidth=0.8; ctx.stroke();
+    }
+    // 전분기 (회색)
+    var prev=prevQuarterScores[inst.id]||{1:0,2:0,3:0,4:0,5:0};
+    ctx.beginPath();
+    for(var i=0;i<n;i++){
+      var v=Number(prev[i+1]||0)/20;
+      var p=pt(i,R*v); i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);
+    }
+    ctx.closePath(); ctx.fillStyle="rgba(136,135,128,0.15)"; ctx.fill();
+    ctx.strokeStyle="#B4B2A9"; ctx.lineWidth=1.5; ctx.stroke();
+    // 현재 (파랑)
+    ctx.beginPath();
+    for(var i=0;i<n;i++){
+      var v=Number(inst.scores[i+1]||0)/20;
+      var p=pt(i,R*v); i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);
+    }
+    ctx.closePath(); ctx.fillStyle="rgba(24,95,165,0.18)"; ctx.fill();
+    ctx.strokeStyle="#185FA5"; ctx.lineWidth=2; ctx.stroke();
+    // 라벨
+    var LABELS=["강의역량","수업설계","교수법","성적향상","만족도"];
+    ctx.fillStyle="#888"; ctx.font="10px sans-serif"; ctx.textAlign="center";
+    for(var i=0;i<n;i++){
+      var p=pt(i,R+14); ctx.fillText(LABELS[i],p[0],p[1]+4);
+    }
+    // 범례
+    ctx.fillStyle="#B4B2A9"; ctx.fillRect(8,H-18,12,3);
+    ctx.fillStyle="#555"; ctx.font="10px sans-serif"; ctx.textAlign="left"; ctx.fillText("전분기",24,H-13);
+    ctx.fillStyle="#185FA5"; ctx.fillRect(70,H-18,12,3);
+    ctx.fillStyle="#555"; ctx.fillText("현재",86,H-13);
+  });
+}
+
+// ── 3. 목표 알림 센터
+function renderAlertCenter() {
+  var ranked = getRanked();
+  var alerts = [];
+  ranked.forEach(function(inst){
+    // Action Plan 미진행
+    if (inst.total!==null && apProgress(inst.id)<40) {
+      alerts.push({type:"danger",icon:"⚠",name:inst.name,grade:inst.grade,
+        msg:"Action Plan 진행률 "+apProgress(inst.id)+"% — 즉시 점검 필요",
+        action:"Action Plan 확인",sub:"action"});
+    }
+    // 불합격
+    if (inst.total!==null && inst.total<PASS_SCORE) {
+      alerts.push({type:"warning",icon:"▼",name:inst.name,grade:inst.grade,
+        msg:"합격선 미달 ("+inst.total+"pts) — 코스웨어 재추천 권장",
+        action:"코스웨어 추천",sub:null});
+    }
+    // 미제출
+    if (inst.total===null) {
+      alerts.push({type:"info",icon:"?",name:inst.name,grade:null,
+        msg:"평가지 미제출 — 제출 독려 필요",
+        action:"제출 독려 연락",sub:null});
+    }
+  });
+
+  var colorMap = {danger:["#FCEBEB","#A32D2D","#F09595"],warning:["#FAEEDA","#854F0B","#FAC775"],info:["#E6F1FB","#0C447C","#85B7EB"]};
+
+  var html = '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">';
+  if (alerts.length===0) {
+    html += '<div class="card" style="text-align:center;padding:40px"><div style="font-size:22px;margin-bottom:8px">✓</div><div style="font-size:14px;font-weight:700;color:#27500A">현재 긴급 알림 없음</div><div style="font-size:12px;color:#aaa;margin-top:4px">모든 강사의 Action Plan이 정상 진행 중입니다</div></div>';
+  } else {
+    alerts.forEach(function(a){
+      var c=colorMap[a.type];
+      html += '<div style="background:'+c[0]+';border:1px solid '+c[2]+';border-radius:12px;padding:13px 16px;display:flex;align-items:center;gap:14px">'
+        +'<div style="width:32px;height:32px;border-radius:50%;background:'+c[1]+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0">'+a.icon+'</div>'
+        +'<div style="flex:1">'
+          +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">'
+            +'<span style="font-size:13px;font-weight:700;color:'+c[1]+'">'+a.name+'</span>'
+            +(a.grade?'<span class="badge" style="background:'+GRADE_CONFIG[a.grade].bg+';color:'+GRADE_CONFIG[a.grade].text+'">'+a.grade+'</span>':"")
+          +'</div>'
+          +'<div style="font-size:12px;color:'+c[1]+'">'+a.msg+'</div>'
+        +'</div>'
+        +(a.sub?'<button class="alert-jump" data-sub="'+a.sub+'" style="background:'+c[1]+';color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:700;white-space:nowrap">'+a.action+' →</button>':'<span style="font-size:11px;font-weight:700;color:'+c[1]+'">'+a.action+'</span>')
+      +'</div>';
+    });
+  }
+  html += '</div>';
+
+  // 리마인더 설정 UI
+  html += '<div class="card"><div class="card-title">D+day 자동 리마인더 설정</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">';
+  [{d:"D+3",desc:"첫 수업 후 즉시 만족도 확인",on:true},
+   {d:"D+7",desc:"컨설턴트 1차 전화 상담",on:true},
+   {d:"D+14",desc:"강사·컨설턴트 케이스 미팅",on:false},
+   {d:"D+30",desc:"1달 종합평가 면담",on:true}].forEach(function(r,ri){
+    html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F8F9FB;border-radius:8px">'
+      +'<div style="width:40px;height:24px;border-radius:12px;background:'+(r.on?"#1A2E4A":"#D3D1C7")+';position:relative;cursor:pointer;transition:background .2s" data-ri="'+ri+'" id="toggle-'+ri+'">'
+        +'<div style="position:absolute;top:3px;left:'+(r.on?'17px':'3px')+';width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s" id="thumb-'+ri+'"></div>'
+      +'</div>'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:700;color:#1A2E4A">'+r.d+'</div><div style="font-size:12px;color:#888">'+r.desc+'</div></div>'
+      +'<span style="font-size:11px;color:'+(r.on?"#27500A":"#bbb")+';font-weight:700">'+(r.on?"활성":"비활성")+'</span>'
+    +'</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+// ── 4. 노하우 피드
+function renderKnowhowFeed() {
+  var tagColors = {
+    "밀착관리":["#E1F5EE","#085041"],
+    "성적향상":["#FAEEDA","#633806"],
+    "학부모소통":["#E6F1FB","#0C447C"],
+    "수업설계":["#EEEDFE","#26215C"],
+  };
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    +'<div style="font-size:14px;font-weight:700;color:#1A2E4A">우수 강사 노하우 피드</div>'
+    +'<button id="kh-write-btn" style="background:#E8A020;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700">+ 노하우 등록</button>'
+  +'</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:12px">';
+  knowhowFeed.forEach(function(item){
+    var gc = GRADE_CONFIG[item.grade]||{bg:"#F1EFE8",text:"#444"};
+    var tc = tagColors[item.tag]||["#F0F0F0","#555"];
+    html += '<div class="card" style="padding:16px 18px">'
+      +'<div style="display:flex;align-items:flex-start;gap:12px">'
+        +'<div class="avatar" style="width:36px;height:36px;font-size:11px">'+item.author.slice(0,2)+'</div>'
+        +'<div style="flex:1">'
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">'
+            +'<span style="font-size:13px;font-weight:700;color:#1A2E4A">'+item.author+'</span>'
+            +'<span class="badge" style="background:'+gc.bg+';color:'+gc.text+'">'+item.grade+'등급</span>'
+            +'<span style="font-size:11px;color:#aaa">'+item.subject+' · '+item.date+'</span>'
+            +'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:'+tc[0]+';color:'+tc[1]+'">'+item.tag+'</span>'
+          +'</div>'
+          +'<div style="font-size:13px;color:#333;line-height:1.7;margin-bottom:10px">'+item.content+'</div>'
+          +'<div style="display:flex;align-items:center;gap:12px">'
+            +'<button class="kh-like" data-kid="'+item.id+'" style="background:#F8F9FB;border:1px solid #EBEBEB;border-radius:7px;padding:5px 12px;font-size:12px;color:#666">♥ '+item.likes+'</button>'
+            +'<button class="kh-save" data-kid="'+item.id+'" style="background:'+(item.saved?"#E6F1FB":"#F8F9FB")+';border:1px solid '+(item.saved?"#185FA5":"#EBEBEB")+';border-radius:7px;padding:5px 12px;font-size:12px;color:'+(item.saved?"#0C447C":"#666")+'">'+(item.saved?"★ 저장됨":"☆ 저장")+'</button>'
+            +'<span style="font-size:11px;color:#bbb;margin-left:auto">취약 강사 자동 추천</span>'
+          +'</div>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+// ── 성과관리 이벤트 바인딩
+function bindPerfEvents(sub) {
+  if (sub==="action") {
+    document.querySelectorAll("input[data-apid]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var id=Number(cb.dataset.apid), ti=Number(cb.dataset.ti);
+        if (actionPlans[id]) {
+          actionPlans[id].tasks[ti].done = cb.checked;
+          renderPerfSub("action");
+          updatePerfBanner();
+        }
+      });
+    });
+    document.querySelectorAll(".ap-gen-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id=Number(btn.dataset.id);
+        var inst=instructors.find(function(i){return i.id===id;});
+        if(inst){delete actionPlans[id];ensureAP(inst);renderPerfSub("action");}
+      });
+    });
+  }
+  if (sub==="growth") {
+    setTimeout(drawRadars, 30);
+  }
+  if (sub==="alert") {
+    document.querySelectorAll(".alert-jump").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var s=btn.dataset.sub;
+        document.querySelectorAll(".perf-sub").forEach(function(b){
+          var isT=b.dataset.sub===s;
+          b.style.background=isT?"#1A2E4A":"#fff";
+          b.style.color=isT?"#fff":"#666";
+          b.style.borderColor=isT?"#1A2E4A":"#EBEBEB";
+        });
+        renderPerfSub(s);
+      });
+    });
+  }
+  if (sub==="feed") {
+    document.querySelectorAll(".kh-like").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var kid=Number(btn.dataset.kid);
+        var item=knowhowFeed.find(function(f){return f.id===kid;});
+        if(item){item.likes++;renderPerfSub("feed");}
+      });
+    });
+    document.querySelectorAll(".kh-save").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var kid=Number(btn.dataset.kid);
+        var item=knowhowFeed.find(function(f){return f.id===kid;});
+        if(item){item.saved=!item.saved;renderPerfSub("feed");}
+      });
+    });
+  }
+}
+
+})(); // IIFE 종료 — 전역 스코프 오염 방지
+</script>
+</body>
+</html>
